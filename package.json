@@ -2,6 +2,10 @@
   "name": "lcp-solidity",
   "version": "0.1.0",
   "description": "LCP Client in Solidity",
+  "scripts": {
+    "compile": "truffle compile",
+    "postinstall": "npm run compile"
+  },
   "dependencies": {
     "@openzeppelin/contracts": "^4.8.0",
     "@hyperledger-labs/yui-ibc-solidity": "git+https://github.com/hyperledger-labs/yui-ibc-solidity.git#v0.3.8",
@@ -10,5 +14,5 @@
     "@ensdomains/ens-contracts": "0.0.22",
     "truffle": "5.8.4"
   },
-  "license": "TBD"
+  "license": "Apache-2.0"
 }
