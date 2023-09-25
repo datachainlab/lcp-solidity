@@ -2,7 +2,7 @@
 
 lcp-solidity is an implementation of [lcp client](https://docs.lcp.network/protocol/lcp-client) in solidity. It can be integrated with [ibc-solidity](https://github.com/hyperledger-labs/yui-ibc-solidity).
 
-An e2e demo is available [here](https://github.com/datachainlab/ethereum-lcp-poc).
+An e2e demo is available [here](https://github.com/datachainlab/cosmos-ethereum-ibc-lcp).
 
 **DISCLAIMER: This repository has not been audited yet, so use it at your own risk.**
 
