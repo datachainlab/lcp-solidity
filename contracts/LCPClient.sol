@@ -31,10 +31,12 @@ contract LCPClient is ILightClient {
     AVRValidator.RSAParams public verifiedRootCAParams;
     // keccak256(signingCert) => RSAParams of signing public key
     mapping(bytes32 => AVRValidator.RSAParams) public verifiedSigningRSAParams;
-    // enclave key => expiredAt
-    mapping(address => uint256) internal enclaveKeys;
-    mapping(string => uint256) internal allowedQuoteStatuses;
-    mapping(string => uint256) internal allowedAdvisories;
+    // clientId => enclave key => expiredAt
+    mapping(string => mapping(address => uint256)) internal enclaveKeys;
+    // clientId => quote status => flag(0: not allowed, 1: allowed)
+    mapping(string => mapping(string => uint256)) internal allowedQuoteStatuses;
+    // clientId => advisory id => flag(0: not allowed, 1: allowed)
+    mapping(string => mapping(string => uint256)) internal allowedAdvisories;
 
     modifier onlyIBC() {
         require(msg.sender == ibcHandler);
@@ -92,10 +94,10 @@ contract LCPClient is ILightClient {
 
         // set allowed quote status and advisories
         for (uint256 i = 0; i < clientState.allowed_quote_statuses.length; i++) {
-            allowedQuoteStatuses[clientState.allowed_quote_statuses[i]] = AVRValidator.FLAG_ALLOWED;
+            allowedQuoteStatuses[clientId][clientState.allowed_quote_statuses[i]] = AVRValidator.FLAG_ALLOWED;
         }
         for (uint256 i = 0; i < clientState.allowed_advisory_ids.length; i++) {
-            allowedAdvisories[clientState.allowed_advisory_ids[i]] = AVRValidator.FLAG_ALLOWED;
+            allowedAdvisories[clientId][clientState.allowed_advisory_ids[i]] = AVRValidator.FLAG_ALLOWED;
         }
 
         return (
@@ -162,14 +164,14 @@ contract LCPClient is ILightClient {
      * The caller is expected to construct the full CommitmentPath from a CommitmentPrefix and a standardized path (as defined in ICS 24).
      */
     function verifyMembership(
-        string memory clientId,
-        Height.Data memory height,
+        string calldata clientId,
+        Height.Data calldata height,
         uint64,
         uint64,
-        bytes memory proof,
+        bytes calldata proof,
         bytes memory prefix,
         bytes memory path,
-        bytes memory value
+        bytes calldata value
     ) public view returns (bool) {
         (LCPCommitment.CommitmentProof memory commitmentProof, LCPCommitment.StateCommitment memory commitment) =
             LCPCommitment.parseStateCommitmentAndProof(proof);
@@ -183,7 +185,7 @@ contract LCPClient is ILightClient {
         require(keccak256(path) == keccak256(commitment.path));
         require(keccak256(value) == commitment.value, "invalid commitment value");
         require(bytes32(consensusState.state_id) == commitment.stateId, "invalid state_id");
-        require(isActiveKey(commitmentProof.signer), "the key isn't active");
+        require(isActiveKey(clientId, commitmentProof.signer), "the key isn't active");
         require(
             verifyCommitmentProof(
                 keccak256(commitmentProof.commitment), commitmentProof.signature, commitmentProof.signer
@@ -219,7 +221,7 @@ contract LCPClient is ILightClient {
         require(keccak256(path) == keccak256(commitment.path));
         require(bytes32(0) == commitment.value, "invalid commitment value");
         require(bytes32(consensusState.state_id) == commitment.stateId, "invalid state_id");
-        require(isActiveKey(commitmentProof.signer), "the key isn't active");
+        require(isActiveKey(clientId, commitmentProof.signer), "the key isn't active");
         require(
             verifyCommitmentProof(
                 keccak256(commitmentProof.commitment), commitmentProof.signature, commitmentProof.signer
@@ -282,7 +284,7 @@ contract LCPClient is ILightClient {
 
         LCPCommitment.validateCommitmentContext(commitment.context, block.timestamp * 1e9);
 
-        require(isActiveKey(address(bytes20(message.signer))), "the key isn't active");
+        require(isActiveKey(clientId, address(bytes20(message.signer))), "the key isn't active");
 
         require(
             verifyCommitmentProof(keccak256(message.commitment), message.signature, address(bytes20(message.signer))),
@@ -308,8 +310,8 @@ contract LCPClient is ILightClient {
         return (keccak256(LCPProtoMarshaler.marshal(clientState)), updates, true);
     }
 
-    function isActiveKey(address signer) internal view returns (bool) {
-        uint256 expiredAt = enclaveKeys[signer];
+    function isActiveKey(string calldata clientId, address signer) internal view returns (bool) {
+        uint256 expiredAt = enclaveKeys[clientId][signer];
         if (expiredAt == 0) {
             return false;
         }
@@ -321,39 +323,43 @@ contract LCPClient is ILightClient {
         returns (bytes32 clientStateCommitment, ConsensusStateUpdate[] memory updates, bool ok)
     {
         ClientState.Data storage clientState = clientStates[clientId];
-        AVRValidator.RSAParams storage params = verifiedSigningRSAParams[keccak256(message.signing_cert)];
-        if (params.notAfter == 0) {
-            require(verifiedRootCAParams.notAfter > block.timestamp, "root public key is expired");
-            AVRValidator.RSAParams memory p = AVRValidator.verifySigningCert(
-                verifiedRootCAParams.modulus, verifiedRootCAParams.exponent, message.signing_cert
-            );
-            params.modulus = p.modulus;
-            params.exponent = p.exponent;
-            // NOTE: notAfter is the minimum of rootCACert and signingCert
-            if (verifiedRootCAParams.notAfter > p.notAfter) {
-                params.notAfter = p.notAfter;
+        {
+            AVRValidator.RSAParams storage params = verifiedSigningRSAParams[keccak256(message.signing_cert)];
+            if (params.notAfter == 0) {
+                require(verifiedRootCAParams.notAfter > block.timestamp, "root public key is expired");
+                AVRValidator.RSAParams memory p = AVRValidator.verifySigningCert(
+                    verifiedRootCAParams.modulus, verifiedRootCAParams.exponent, message.signing_cert
+                );
+                params.modulus = p.modulus;
+                params.exponent = p.exponent;
+                // NOTE: notAfter is the minimum of rootCACert and signingCert
+                if (verifiedRootCAParams.notAfter > p.notAfter) {
+                    params.notAfter = p.notAfter;
+                } else {
+                    params.notAfter = verifiedRootCAParams.notAfter;
+                }
             } else {
-                params.notAfter = verifiedRootCAParams.notAfter;
+                require(params.notAfter > block.timestamp, "certificate is expired");
             }
-        } else {
-            require(params.notAfter > block.timestamp, "certificate is expired");
+            require(
+                AVRValidator.verifySignature(
+                    sha256(bytes(message.report)), message.signature, params.exponent, params.modulus
+                ),
+                "failed to verify signature"
+            );
         }
-        require(
-            AVRValidator.verifySignature(
-                sha256(bytes(message.report)), message.signature, params.exponent, params.modulus
-            ),
-            "failed to verify signature"
-        );
 
         (address enclaveKey, bytes memory attestationTimeBytes, bytes32 mrenclave) = AVRValidator
-            .validateAndExtractElements(developmentMode, bytes(message.report), allowedQuoteStatuses, allowedAdvisories);
+            .validateAndExtractElements(
+            developmentMode, bytes(message.report), allowedQuoteStatuses[clientId], allowedAdvisories[clientId]
+        );
         require(bytes32(clientState.mrenclave) == mrenclave, "mrenclave mismatch");
 
         uint256 expiredAt =
             uint64(LCPUtils.attestationTimestampToSeconds(attestationTimeBytes)) + clientState.key_expiration;
         require(expiredAt > block.timestamp, "the report is already expired");
-        require(enclaveKeys[enclaveKey] == 0, "the key already exists");
-        enclaveKeys[enclaveKey] = expiredAt;
+        require(enclaveKeys[clientId][enclaveKey] == 0, "the key already exists");
+        enclaveKeys[clientId][enclaveKey] = expiredAt;
 
         // Note: client and consensus state are not always updated in registerEnclaveKey
         return (bytes32(0), updates, true);

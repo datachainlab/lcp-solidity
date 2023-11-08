@@ -185,7 +185,8 @@ contract LCPClientTest is BasicTest {
                 })
             );
         }
-        (, LCPCommitment.StateCommitment memory commitment) = LCPCommitment.parseStateCommitmentAndProof(proof);
+        (, LCPCommitment.StateCommitment memory commitment) =
+            LCPCommitmentTestHelper.parseStateCommitmentAndProof(proof);
         assert(commitment.value == keccak256(value));
 
         height = commitment.height;
@@ -212,7 +213,8 @@ contract LCPClientTest is BasicTest {
                 signature: signature
             })
         );
-        (, LCPCommitment.StateCommitment memory commitment) = LCPCommitment.parseStateCommitmentAndProof(proof);
+        (, LCPCommitment.StateCommitment memory commitment) =
+            LCPCommitmentTestHelper.parseStateCommitmentAndProof(proof);
         assert(commitment.value == bytes32(0));
 
         height = commitment.height;

@@ -9,40 +9,38 @@ contract LCPCommitmentTest is BasicTest {
     function setUp() public {}
 
     function testTrustingPeriodContext() public {
-        LCPCommitmentTestHelper lc = new LCPCommitmentTestHelper();
-
         // OK
-        lc.validateTrustingPeriodContext(
+        LCPCommitmentTestHelper.validateTrustingPeriodContext(
             LCPCommitment.TrustingPeriodContext(1692489600000000000, 1692489600000000000, 1, 1), 1692489600000000000
         );
 
         vm.expectRevert(bytes("out of trusting period"));
-        lc.validateTrustingPeriodContext(
+        LCPCommitmentTestHelper.validateTrustingPeriodContext(
             LCPCommitment.TrustingPeriodContext(1692489599999999999, 1692489599999999998, 1, 0), 1692489600000000000
         );
 
         vm.expectRevert(bytes("out of trusting period"));
-        lc.validateTrustingPeriodContext(
+        LCPCommitmentTestHelper.validateTrustingPeriodContext(
             LCPCommitment.TrustingPeriodContext(1692489599999999999, 1692489599999999998, 2, 0), 1692489600000000000
         );
 
         // OK
-        lc.validateTrustingPeriodContext(
+        LCPCommitmentTestHelper.validateTrustingPeriodContext(
             LCPCommitment.TrustingPeriodContext(1692489599999999999, 1692489599999999998, 3, 0), 1692489600000000000
         );
 
         vm.expectRevert(bytes("header is from the future"));
-        lc.validateTrustingPeriodContext(
+        LCPCommitmentTestHelper.validateTrustingPeriodContext(
             LCPCommitment.TrustingPeriodContext(1692489600000000001, 1692489600000000000, 1, 0), 1692489600000000000
         );
 
         vm.expectRevert(bytes("header is from the future"));
-        lc.validateTrustingPeriodContext(
+        LCPCommitmentTestHelper.validateTrustingPeriodContext(
             LCPCommitment.TrustingPeriodContext(1692489600000000001, 1692489600000000000, 1, 1), 1692489600000000000
         );
 
         // OK
-        lc.validateTrustingPeriodContext(
+        LCPCommitmentTestHelper.validateTrustingPeriodContext(
             LCPCommitment.TrustingPeriodContext(1692489600000000001, 1692489600000000000, 1, 2), 1692489600000000000
         );
     }
@@ -218,14 +216,5 @@ contract LCPCommitmentTest is BasicTest {
             assertEq(c.height.revision_height, testCase.expected.height.revision_height);
             assertEq(c.stateId, testCase.expected.stateId);
         }
-    }
-}
-
-contract LCPCommitmentTestHelper {
-    function validateTrustingPeriodContext(
-        LCPCommitment.TrustingPeriodContext memory context,
-        uint256 currentTimestampNanos
-    ) public pure {
-        LCPCommitment.validateTrustingPeriodContext(context, currentTimestampNanos);
     }
 }
