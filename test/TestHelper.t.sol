@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "forge-std/StdJson.sol";
 import "../contracts/AVRValidator.sol";
 import "../contracts/LCPUtils.sol";
+import "../contracts/LCPCommitment.sol";
 
 abstract contract BasicTest is Test {
     using stdJson for string;
@@ -58,5 +59,22 @@ library TestAVRValidator {
         mapping(string => uint256) storage allowedAdvisories
     ) public view returns (uint256) {
         return AVRValidator.validateAdvisories(report, offset, allowedAdvisories);
+    }
+}
+
+library LCPCommitmentTestHelper {
+    function validateTrustingPeriodContext(
+        LCPCommitment.TrustingPeriodContext memory context,
+        uint256 currentTimestampNanos
+    ) public pure {
+        LCPCommitment.validateTrustingPeriodContext(context, currentTimestampNanos);
+    }
+
+    function parseStateCommitmentAndProof(bytes calldata proofBytes)
+        public
+        pure
+        returns (LCPCommitment.CommitmentProof memory, LCPCommitment.StateCommitment memory)
+    {
+        return LCPCommitment.parseStateCommitmentAndProof(proofBytes);
     }
 }

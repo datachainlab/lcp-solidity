@@ -137,7 +137,7 @@ library LCPCommitment {
         return abi.decode(hc.commitment, (StateCommitment));
     }
 
-    function parseStateCommitmentAndProof(bytes memory proofBytes)
+    function parseStateCommitmentAndProof(bytes calldata proofBytes)
         internal
         pure
         returns (CommitmentProof memory, StateCommitment memory)
