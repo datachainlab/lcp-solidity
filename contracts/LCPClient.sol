@@ -127,6 +127,14 @@ contract LCPClient is ILightClient {
         ClientState.Data storage clientState = clientStates[clientId];
         return (clientState.latest_height, clientState.latest_height.revision_height != 0);
     }
+    /**
+     * @dev getStatus returns the status of the client corresponding to `clientId`.
+     */
+
+    function getStatus(string calldata) external view returns (ClientStatus) {
+        // TODO: should return the correct status after implementing the misbehavior detection
+        return ClientStatus.Active;
+    }
 
     /**
      * @dev updateClient updates the client corresponding to `clientId`.
