@@ -20,6 +20,8 @@ import "./AVRValidator.sol";
 contract LCPClient is ILightClient {
     using IBCHeight for Height.Data;
 
+    event RegisteredEnclaveKey(string clientId, address enclaveKey, uint256 expiredAt);
+
     address immutable ibcHandler;
     // if developmentMode is true, the client allows the remote attestation of IAS in development.
     bool immutable developmentMode;
@@ -322,7 +324,6 @@ contract LCPClient is ILightClient {
         internal
         returns (bytes32 clientStateCommitment, ConsensusStateUpdate[] memory updates, bool ok)
     {
-        ClientState.Data storage clientState = clientStates[clientId];
         {
             AVRValidator.RSAParams storage params = verifiedSigningRSAParams[keccak256(message.signing_cert)];
             if (params.notAfter == 0) {
@@ -349,6 +350,7 @@ contract LCPClient is ILightClient {
             );
         }
 
+        ClientState.Data storage clientState = clientStates[clientId];
         (address enclaveKey, bytes memory attestationTimeBytes, bytes32 mrenclave) = AVRValidator
             .validateAndExtractElements(
             developmentMode, bytes(message.report), allowedQuoteStatuses[clientId], allowedAdvisories[clientId]
@@ -358,8 +360,15 @@ contract LCPClient is ILightClient {
         uint256 expiredAt =
             uint64(LCPUtils.attestationTimestampToSeconds(attestationTimeBytes)) + clientState.key_expiration;
         require(expiredAt > block.timestamp, "the report is already expired");
-        require(enclaveKeys[clientId][enclaveKey] == 0, "the key already exists");
+
+        if (enclaveKeys[clientId][enclaveKey] != 0) {
+            require(enclaveKeys[clientId][enclaveKey] == expiredAt, "expiredAt mismatch");
+            // NOTE: if the key already exists, don't update any state
+            return (bytes32(0), updates, true);
+        }
+
         enclaveKeys[clientId][enclaveKey] = expiredAt;
+        emit RegisteredEnclaveKey(clientId, enclaveKey, expiredAt);
 
         // Note: client and consensus state are not always updated in registerEnclaveKey
         return (bytes32(0), updates, true);
