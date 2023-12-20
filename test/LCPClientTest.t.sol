@@ -197,13 +197,13 @@ contract LCPClientTest is BasicTest {
                 })
             );
         }
-        (, LCPCommitment.StateCommitment memory commitment) =
-            LCPCommitmentTestHelper.parseStateCommitmentAndProof(proof);
-        assert(commitment.value == keccak256(value));
+        (, LCPCommitment.VerifyMembershipMessage memory message) =
+            LCPCommitmentTestHelper.parseVerifyMembershipCommitmentProof(proof);
+        assert(message.value == keccak256(value));
 
-        height = commitment.height;
+        height = message.height;
         prefix = readDecodedBytes(string(abi.encodePacked(verifyMembershipFilePrefix, commandInputSuffix)), ".prefix");
-        path = commitment.path;
+        path = message.path;
     }
 
     function createVerifyNonMembershipInputs(string memory verifyNonMembershipFilePrefix)
@@ -225,14 +225,14 @@ contract LCPClientTest is BasicTest {
                 signature: signature
             })
         );
-        (, LCPCommitment.StateCommitment memory commitment) =
-            LCPCommitmentTestHelper.parseStateCommitmentAndProof(proof);
-        assert(commitment.value == bytes32(0));
+        (, LCPCommitment.VerifyMembershipMessage memory message) =
+            LCPCommitmentTestHelper.parseVerifyMembershipCommitmentProof(proof);
+        assert(message.value == bytes32(0));
 
-        height = commitment.height;
+        height = message.height;
         prefix =
             readDecodedBytes(string(abi.encodePacked(verifyNonMembershipFilePrefix, commandInputSuffix)), ".prefix");
-        path = commitment.path;
+        path = message.path;
     }
 
     function tData(string memory name) private view returns (string memory) {
