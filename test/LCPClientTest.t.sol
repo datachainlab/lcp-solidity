@@ -58,7 +58,7 @@ contract LCPClientTest is BasicTest {
     }
 
     function testSimulationClient() public {
-        vm.warp(1692702080);
+        vm.warp(1703138378);
         setTestContext(TestContext("02", simulationLC));
         testClient();
     }
@@ -161,7 +161,7 @@ contract LCPClientTest is BasicTest {
         returns (UpdateClientMessage.Data memory message)
     {
         message.commitment =
-            readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".commitment_bytes");
+            readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".message");
         message.signer =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".signer");
         message.signature =
@@ -180,9 +180,8 @@ contract LCPClientTest is BasicTest {
     {
         value = readDecodedBytes(string(abi.encodePacked(verifyMembershipFilePrefix, commandInputSuffix)), ".value");
         {
-            bytes memory commitmentBytes = readDecodedBytes(
-                string(abi.encodePacked(verifyMembershipFilePrefix, commandResultSuffix)), ".commitment_bytes"
-            );
+            bytes memory commitmentBytes =
+                readDecodedBytes(string(abi.encodePacked(verifyMembershipFilePrefix, commandResultSuffix)), ".message");
             bytes memory signer =
                 readDecodedBytes(string(abi.encodePacked(verifyMembershipFilePrefix, commandResultSuffix)), ".signer");
             require(signer.length == 20, "signer length must be 20");
@@ -210,9 +209,8 @@ contract LCPClientTest is BasicTest {
         internal
         returns (Height.Data memory height, bytes memory proof, bytes memory prefix, bytes memory path)
     {
-        bytes memory commitmentBytes = readDecodedBytes(
-            string(abi.encodePacked(verifyNonMembershipFilePrefix, commandResultSuffix)), ".commitment_bytes"
-        );
+        bytes memory commitmentBytes =
+            readDecodedBytes(string(abi.encodePacked(verifyNonMembershipFilePrefix, commandResultSuffix)), ".message");
         bytes memory signer =
             readDecodedBytes(string(abi.encodePacked(verifyNonMembershipFilePrefix, commandResultSuffix)), ".signer");
         require(signer.length == 20, "signer length must be 20");
