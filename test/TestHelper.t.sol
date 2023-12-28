@@ -63,18 +63,18 @@ library TestAVRValidator {
 }
 
 library LCPCommitmentTestHelper {
-    function validateTrustingPeriodContext(
+    function trustingPeriodContextEval(
         LCPCommitment.TrustingPeriodContext memory context,
         uint256 currentTimestampNanos
     ) public pure {
-        LCPCommitment.validateTrustingPeriodContext(context, currentTimestampNanos);
+        LCPCommitment.trustingPeriodContextEval(context, currentTimestampNanos);
     }
 
-    function parseStateCommitmentAndProof(bytes calldata proofBytes)
+    function parseVerifyMembershipCommitmentProof(bytes calldata proofBytes)
         public
         pure
-        returns (LCPCommitment.CommitmentProof memory, LCPCommitment.StateCommitment memory)
+        returns (LCPCommitment.CommitmentProof memory, LCPCommitment.VerifyMembershipMessage memory)
     {
-        return LCPCommitment.parseStateCommitmentAndProof(proofBytes);
+        return LCPCommitment.parseVerifyMembershipCommitmentProof(proofBytes);
     }
 }

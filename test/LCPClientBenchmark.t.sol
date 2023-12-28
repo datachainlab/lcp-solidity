@@ -56,7 +56,7 @@ abstract contract BaseLCPClientBenchmark is BasicTest {
         returns (UpdateClientMessage.Data memory message)
     {
         message.commitment =
-            readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".commitment_bytes");
+            readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".message");
         message.signer =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".signer");
         message.signature =
@@ -109,14 +109,14 @@ contract BLCPClient is LCPClient {
 
 contract NoCacheEnclaveRegistrationBenchmark is BaseLCPClientBenchmark {
     function setUp() public {
-        vm.warp(1692702080);
+        vm.warp(1703138378);
         lc = createLCContract();
         clientId = generateClientId(1);
         createClient();
     }
 
     function testRegisterEnclaveKey() public {
-        vm.warp(1692702080);
+        vm.warp(1703138378);
         bytes memory message = LCPProtoMarshaler.marshal(createRegisterEnclaveKeyMessage(commandAvrFile));
         (, ConsensusStateUpdate[] memory updates, bool ok) = lc.registerEnclaveKeyNoCache(clientId, message);
         require(ok, "failed to register enclave key");
@@ -126,7 +126,7 @@ contract NoCacheEnclaveRegistrationBenchmark is BaseLCPClientBenchmark {
 
 contract CachedEnclaveRegistrationBenchmark is BaseLCPClientBenchmark {
     function setUp() public {
-        vm.warp(1692702080);
+        vm.warp(1703138378);
         lc = createLCContract();
         clientId = generateClientId(1);
         createClient();
@@ -141,7 +141,7 @@ contract CachedEnclaveRegistrationBenchmark is BaseLCPClientBenchmark {
     }
 
     function testRegisterEnclaveKey() public {
-        vm.warp(1692702080);
+        vm.warp(1703138378);
         bytes memory message = LCPProtoMarshaler.marshal(createRegisterEnclaveKeyMessage(commandAvrFile));
         (, ConsensusStateUpdate[] memory updates, bool ok) = lc.registerEnclaveKeyCache(clientId, message);
         require(ok, "failed to register enclave key");
@@ -151,7 +151,7 @@ contract CachedEnclaveRegistrationBenchmark is BaseLCPClientBenchmark {
 
 contract UpdateClientBenchmark is BaseLCPClientBenchmark {
     function setUp() public {
-        vm.warp(1692702080);
+        vm.warp(1703138378);
         lc = createLCContract();
         clientId = generateClientId(1);
         createClient();

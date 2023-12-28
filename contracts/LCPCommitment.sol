@@ -10,37 +10,42 @@ library LCPCommitment {
     uint16 constant LCPCommitmentContextTypeEmpty = 0;
     uint16 constant LCPCommitmentContextTypeTrustingPeriod = 1;
 
-    struct HeaderedCommitment {
+    struct HeaderedMessage {
         bytes32 header;
-        bytes commitment;
+        bytes message;
     }
 
-    struct UpdateClientCommitment {
-        bytes32 prevStateId;
-        bytes32 newStateId;
-        bytes newState;
+    struct UpdateClientMessage {
         Height.Data prevHeight;
-        Height.Data newHeight;
+        bytes32 prevStateId;
+        Height.Data postHeight;
+        bytes32 postStateId;
         uint128 timestamp;
         bytes context;
+        EmittedState[] emittedStates;
     }
 
-    function parseUpdateClientCommitment(bytes memory commitmentBytes)
+    struct EmittedState {
+        Height.Data height;
+        bytes state;
+    }
+
+    function parseUpdateClientMessage(bytes memory commitmentBytes)
         internal
         pure
-        returns (UpdateClientCommitment memory commitment)
+        returns (UpdateClientMessage memory commitment)
     {
-        HeaderedCommitment memory hc = abi.decode(commitmentBytes, (HeaderedCommitment));
+        HeaderedMessage memory hm = abi.decode(commitmentBytes, (HeaderedMessage));
         // MSB first
         // 0-1:  version
-        // 2-3:  commitment type
+        // 2-3:  message type
         // 4-31: reserved
         bytes32 header = bytes32(uint256(LCPCommitmentVersion) << 240 | uint256(LCPCommitmentTypeUpdateClient) << 224);
-        require(hc.header == header, "unexpected header");
-        return abi.decode(hc.commitment, (UpdateClientCommitment));
+        require(hm.header == header, "unexpected header");
+        return abi.decode(hm.message, (UpdateClientMessage));
     }
 
-    struct HeaderedCommitmentContext {
+    struct ValidationContext {
         bytes32 header;
         bytes context;
     }
@@ -52,12 +57,8 @@ library LCPCommitment {
         uint128 clockDrift;
     }
 
-    function parseHeaderedCommitmentContext(bytes memory context)
-        internal
-        pure
-        returns (HeaderedCommitmentContext memory)
-    {
-        return abi.decode(context, (HeaderedCommitmentContext));
+    function parseValidationContext(bytes memory context) internal pure returns (ValidationContext memory) {
+        return abi.decode(context, (ValidationContext));
     }
 
     function extractContextType(bytes32 header) internal pure returns (uint16) {
@@ -67,17 +68,17 @@ library LCPCommitment {
         return uint16(uint256(header) >> 240);
     }
 
-    function validateCommitmentContext(bytes memory context, uint256 currentTimestampNanos) internal pure {
-        HeaderedCommitmentContext memory hc = parseHeaderedCommitmentContext(context);
+    function validationContextEval(bytes memory context, uint256 currentTimestampNanos) internal pure {
+        ValidationContext memory vc = parseValidationContext(context);
         // MSB first
         // 0-1:  type
         // 2-31: reserved
-        uint16 contextType = extractContextType(hc.header);
+        uint16 contextType = extractContextType(vc.header);
         if (contextType == LCPCommitmentContextTypeEmpty) {
             return;
         } else if (contextType == LCPCommitmentContextTypeTrustingPeriod) {
-            require(hc.context.length == 64, "invalid trusting period context length");
-            return validateTrustingPeriodContext(parseTrustingPeriodContext(hc.context), currentTimestampNanos);
+            require(vc.context.length == 64, "invalid trusting period context length");
+            return trustingPeriodContextEval(parseTrustingPeriodContext(vc.context), currentTimestampNanos);
         } else {
             revert("unknown context type");
         }
@@ -100,7 +101,7 @@ library LCPCommitment {
         return TrustingPeriodContext(untrustedHeaderTimestamp, trustedStateTimestamp, trustingPeriod, clockDrift);
     }
 
-    function validateTrustingPeriodContext(TrustingPeriodContext memory context, uint256 currentTimestampNanos)
+    function trustingPeriodContextEval(TrustingPeriodContext memory context, uint256 currentTimestampNanos)
         internal
         pure
     {
@@ -118,7 +119,7 @@ library LCPCommitment {
         bytes signature;
     }
 
-    struct StateCommitment {
+    struct VerifyMembershipMessage {
         bytes prefix;
         bytes path;
         bytes32 value;
@@ -126,23 +127,27 @@ library LCPCommitment {
         bytes32 stateId;
     }
 
-    function parseStateCommitment(bytes memory commitmentBytes) internal pure returns (StateCommitment memory) {
-        HeaderedCommitment memory hc = abi.decode(commitmentBytes, (HeaderedCommitment));
-        // MSB first
-        // 0-1:  version
-        // 2-3:  commitment type
-        // 4-31: reserved
-        bytes32 header = bytes32(uint256(LCPCommitmentVersion) << 240 | uint256(LCPCommitmentTypeState) << 224);
-        require(hc.header == header, "unexpected header");
-        return abi.decode(hc.commitment, (StateCommitment));
-    }
-
-    function parseStateCommitmentAndProof(bytes calldata proofBytes)
+    function parseVerifyMembershipMessage(bytes memory message)
         internal
         pure
-        returns (CommitmentProof memory, StateCommitment memory)
+        returns (VerifyMembershipMessage memory)
+    {
+        HeaderedMessage memory hm = abi.decode(message, (HeaderedMessage));
+        // MSB first
+        // 0-1:  version
+        // 2-3:  message type
+        // 4-31: reserved
+        bytes32 header = bytes32(uint256(LCPCommitmentVersion) << 240 | uint256(LCPCommitmentTypeState) << 224);
+        require(hm.header == header, "unexpected header");
+        return abi.decode(hm.message, (VerifyMembershipMessage));
+    }
+
+    function parseVerifyMembershipCommitmentProof(bytes calldata proofBytes)
+        internal
+        pure
+        returns (CommitmentProof memory, VerifyMembershipMessage memory)
     {
         CommitmentProof memory commitmentProof = abi.decode(proofBytes, (CommitmentProof));
-        return (commitmentProof, parseStateCommitment(commitmentProof.commitment));
+        return (commitmentProof, parseVerifyMembershipMessage(commitmentProof.commitment));
     }
 }

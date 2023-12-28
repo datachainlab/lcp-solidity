@@ -52,13 +52,13 @@ contract LCPClientTest is BasicTest {
     }
 
     function testIASClient() public {
-        vm.warp(1692703263);
+        vm.warp(1703238378);
         setTestContext(TestContext("01", iasLC));
         testClient();
     }
 
     function testSimulationClient() public {
-        vm.warp(1692702080);
+        vm.warp(1703138378);
         setTestContext(TestContext("02", simulationLC));
         testClient();
     }
@@ -161,7 +161,7 @@ contract LCPClientTest is BasicTest {
         returns (UpdateClientMessage.Data memory message)
     {
         message.commitment =
-            readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".commitment_bytes");
+            readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".message");
         message.signer =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".signer");
         message.signature =
@@ -180,9 +180,8 @@ contract LCPClientTest is BasicTest {
     {
         value = readDecodedBytes(string(abi.encodePacked(verifyMembershipFilePrefix, commandInputSuffix)), ".value");
         {
-            bytes memory commitmentBytes = readDecodedBytes(
-                string(abi.encodePacked(verifyMembershipFilePrefix, commandResultSuffix)), ".commitment_bytes"
-            );
+            bytes memory commitmentBytes =
+                readDecodedBytes(string(abi.encodePacked(verifyMembershipFilePrefix, commandResultSuffix)), ".message");
             bytes memory signer =
                 readDecodedBytes(string(abi.encodePacked(verifyMembershipFilePrefix, commandResultSuffix)), ".signer");
             require(signer.length == 20, "signer length must be 20");
@@ -197,22 +196,21 @@ contract LCPClientTest is BasicTest {
                 })
             );
         }
-        (, LCPCommitment.StateCommitment memory commitment) =
-            LCPCommitmentTestHelper.parseStateCommitmentAndProof(proof);
-        assert(commitment.value == keccak256(value));
+        (, LCPCommitment.VerifyMembershipMessage memory message) =
+            LCPCommitmentTestHelper.parseVerifyMembershipCommitmentProof(proof);
+        assert(message.value == keccak256(value));
 
-        height = commitment.height;
+        height = message.height;
         prefix = readDecodedBytes(string(abi.encodePacked(verifyMembershipFilePrefix, commandInputSuffix)), ".prefix");
-        path = commitment.path;
+        path = message.path;
     }
 
     function createVerifyNonMembershipInputs(string memory verifyNonMembershipFilePrefix)
         internal
         returns (Height.Data memory height, bytes memory proof, bytes memory prefix, bytes memory path)
     {
-        bytes memory commitmentBytes = readDecodedBytes(
-            string(abi.encodePacked(verifyNonMembershipFilePrefix, commandResultSuffix)), ".commitment_bytes"
-        );
+        bytes memory commitmentBytes =
+            readDecodedBytes(string(abi.encodePacked(verifyNonMembershipFilePrefix, commandResultSuffix)), ".message");
         bytes memory signer =
             readDecodedBytes(string(abi.encodePacked(verifyNonMembershipFilePrefix, commandResultSuffix)), ".signer");
         require(signer.length == 20, "signer length must be 20");
@@ -225,14 +223,14 @@ contract LCPClientTest is BasicTest {
                 signature: signature
             })
         );
-        (, LCPCommitment.StateCommitment memory commitment) =
-            LCPCommitmentTestHelper.parseStateCommitmentAndProof(proof);
-        assert(commitment.value == bytes32(0));
+        (, LCPCommitment.VerifyMembershipMessage memory message) =
+            LCPCommitmentTestHelper.parseVerifyMembershipCommitmentProof(proof);
+        assert(message.value == bytes32(0));
 
-        height = commitment.height;
+        height = message.height;
         prefix =
             readDecodedBytes(string(abi.encodePacked(verifyNonMembershipFilePrefix, commandInputSuffix)), ".prefix");
-        path = commitment.path;
+        path = message.path;
     }
 
     function tData(string memory name) private view returns (string memory) {
