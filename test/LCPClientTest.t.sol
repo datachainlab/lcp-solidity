@@ -67,43 +67,40 @@ contract LCPClientTest is BasicTest {
 
     function testClient() internal {
         string memory clientId = generateClientId(1);
-        ILightClient lc = testContext.lc;
+        LCPClient lc = testContext.lc;
         {
             ClientState.Data memory clientState = createInitialState(commandAvrFile);
             ConsensusState.Data memory consensusState;
-            (, ConsensusStateUpdate memory update, bool ok) = lc.createClient(
+            Height.Data memory height = lc.initializeClient(
                 clientId, LCPProtoMarshaler.marshal(clientState), LCPProtoMarshaler.marshal(consensusState)
             );
-            require(ok, "failed to create client");
-            require(update.height.eq(clientState.latest_height));
+            require(height.eq(clientState.latest_height));
         }
 
         {
-            bytes memory message = LCPProtoMarshaler.marshal(createRegisterEnclaveKeyMessage(commandAvrFile));
+            RegisterEnclaveKeyMessage.Data memory message = createRegisterEnclaveKeyMessage(commandAvrFile);
             vm.expectEmit(false, false, false, false);
             emit RegisteredEnclaveKey(clientId, address(0), 0);
-            (, ConsensusStateUpdate[] memory updates, bool ok) = lc.updateClient(clientId, message);
-            require(ok, "failed to register enclave key");
-            require(updates.length == 0);
+            Height.Data[] memory heights = lc.registerEnclaveKey(clientId, message);
+            require(heights.length == 0);
         }
 
         {
-            bytes memory message = LCPProtoMarshaler.marshal(createRegisterEnclaveKeyMessage(commandAvrFile));
+            RegisterEnclaveKeyMessage.Data memory message = createRegisterEnclaveKeyMessage(commandAvrFile);
             // the following staticcall is expected to succeed because registerEnclaveKey does not update the state if the message contains an enclave key already registered
             (bool success,) =
-                address(lc).staticcall(abi.encodeWithSelector(ILightClient.updateClient.selector, clientId, message));
+                address(lc).staticcall(abi.encodeWithSelector(LCPClient.registerEnclaveKey.selector, clientId, message));
             require(success, "failed to register duplicated enclave key");
         }
 
         TestData[] memory dataList = readTestDataList();
         for (uint256 i = 0; i < dataList.length; i++) {
             if (dataList[i].cmd == Command.UpdateClient) {
-                bytes memory message = LCPProtoMarshaler.marshal(createUpdateClientMessage(dataList[i].path));
-                (, ConsensusStateUpdate[] memory updates, bool ok) = lc.updateClient(clientId, message);
-                require(ok, "failed to update client");
-                require(updates.length == 1, "updates length must be 1");
+                UpdateClientMessage.Data memory message = createUpdateClientMessage(dataList[i].path);
+                Height.Data[] memory heights = lc.updateState(clientId, message);
+                require(heights.length == 1, "heights length must be 1");
                 console.log("revision_height:");
-                console.log(updates[0].height.revision_height);
+                console.log(heights[0].revision_height);
             } else if (dataList[i].cmd == Command.VerifyMembership) {
                 (
                     Height.Data memory height,

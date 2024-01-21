@@ -49,27 +49,25 @@ library LCPProtoMarshaler {
         return Any.encode(anyConsensusState);
     }
 
-    function unmarshalClientState(bytes calldata bz)
-        external
-        pure
-        returns (ClientState.Data memory clientState, bool ok)
-    {
+    function unmarshalClientState(bytes calldata bz) external pure returns (ClientState.Data memory clientState) {
         Any.Data memory anyClientState = Any.decode(bz);
-        if (keccak256(abi.encodePacked(anyClientState.type_url)) != CLIENT_STATE_TYPE_URL_HASH) {
-            return (clientState, false);
-        }
-        return (ClientState.decode(anyClientState.value), true);
+        require(
+            keccak256(abi.encodePacked(anyClientState.type_url)) == CLIENT_STATE_TYPE_URL_HASH,
+            "invalid client state type url"
+        );
+        return ClientState.decode(anyClientState.value);
     }
 
     function unmarshalConsensusState(bytes calldata bz)
         external
         pure
-        returns (ConsensusState.Data memory consensusState, bool ok)
+        returns (ConsensusState.Data memory consensusState)
     {
         Any.Data memory anyConsensusState = Any.decode(bz);
-        if (keccak256(abi.encodePacked(anyConsensusState.type_url)) != CONSENSUS_STATE_TYPE_URL_HASH) {
-            return (consensusState, false);
-        }
-        return (ConsensusState.decode(anyConsensusState.value), true);
+        require(
+            keccak256(abi.encodePacked(anyConsensusState.type_url)) == CONSENSUS_STATE_TYPE_URL_HASH,
+            "invalid consensus state type url"
+        );
+        return ConsensusState.decode(anyConsensusState.value);
     }
 }

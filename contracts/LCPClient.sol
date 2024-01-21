@@ -52,45 +52,32 @@ contract LCPClient is ILightClient {
     }
 
     // @dev isDevelopmentMode returns true if the client allows the remote attestation of IAS in development.
-    function isDevelopmentMode() public view returns (bool) {
+    function isDevelopmentMode() external view returns (bool) {
         return developmentMode;
     }
 
     /**
-     * @dev createClient creates a new client with the given state.
-     * If succeeded, it returns a commitment for the initial state.
+     * @dev initializeClient initializes a new client with the given state.
+     *      If succeeded, it returns heights at which the consensus state are stored.
+     *      The function must be only called by IBCHandler.
      */
-    function createClient(string calldata clientId, bytes calldata clientStateBytes, bytes calldata consensusStateBytes)
-        public
-        onlyIBC
-        returns (bytes32 clientStateCommitment, ConsensusStateUpdate memory update, bool ok)
-    {
-        ClientState.Data memory clientState;
-        ConsensusState.Data memory consensusState;
+    function initializeClient(
+        string calldata clientId,
+        bytes calldata protoClientState,
+        bytes calldata protoConsensusState
+    ) external onlyIBC returns (Height.Data memory height) {
+        ClientState.Data memory clientState = LCPProtoMarshaler.unmarshalClientState(protoClientState);
+        ConsensusState.Data memory consensusState = LCPProtoMarshaler.unmarshalConsensusState(protoConsensusState);
 
-        (clientState, ok) = LCPProtoMarshaler.unmarshalClientState(clientStateBytes);
-        if (!ok) {
-            return (clientStateCommitment, update, false);
-        }
-        // NOTE consensusState is always default value
-        (consensusState, ok) = LCPProtoMarshaler.unmarshalConsensusState(consensusStateBytes);
-        if (!ok) {
-            return (clientStateCommitment, update, false);
-        }
+        // validate an initial state
+        require(
+            clientState.latest_height.revision_number == 0 && clientState.latest_height.revision_height == 0,
+            "invalid initial height"
+        );
+        require(clientState.key_expiration != 0, "key_expiration must be non-zero");
+        require(clientState.mrenclave.length == 32, "invalid mrenclave length");
+        require(consensusState.timestamp == 0 && consensusState.state_id.length == 0, "invalid consensus state");
 
-        // Validate an initial state
-        if (clientState.latest_height.revision_number != 0 || clientState.latest_height.revision_height != 0) {
-            return (clientStateCommitment, update, false);
-        }
-        if (clientState.key_expiration == 0) {
-            return (clientStateCommitment, update, false);
-        }
-        if (clientState.mrenclave.length != 32) {
-            return (clientStateCommitment, update, false);
-        }
-        if (consensusState.timestamp != 0 || consensusState.state_id.length != 0) {
-            return (clientStateCommitment, update, false);
-        }
         // NOTE should we set only non-default values?
         clientStates[clientId] = clientState;
 
@@ -102,34 +89,29 @@ contract LCPClient is ILightClient {
             allowedAdvisories[clientId][clientState.allowed_advisory_ids[i]] = AVRValidator.FLAG_ALLOWED;
         }
 
-        return (
-            keccak256(clientStateBytes),
-            ConsensusStateUpdate({
-                consensusStateCommitment: keccak256(consensusStateBytes),
-                height: clientState.latest_height
-            }),
-            true
-        );
+        return clientState.latest_height;
     }
 
     /**
      * @dev getTimestampAtHeight returns the timestamp of the consensus state at the given height.
      */
     function getTimestampAtHeight(string calldata clientId, Height.Data calldata height)
-        public
+        external
         view
-        returns (uint64, bool)
+        returns (uint64)
     {
         ConsensusState.Data storage consensusState = consensusStates[clientId][height.toUint128()];
-        return (consensusState.timestamp, consensusState.timestamp != 0);
+        require(consensusState.timestamp != 0, "consensus state not found");
+        return consensusState.timestamp;
     }
 
     /**
      * @dev getLatestHeight returns the latest height of the client state corresponding to `clientId`.
      */
-    function getLatestHeight(string calldata clientId) public view returns (Height.Data memory, bool) {
+    function getLatestHeight(string calldata clientId) external view returns (Height.Data memory) {
         ClientState.Data storage clientState = clientStates[clientId];
-        return (clientState.latest_height, clientState.latest_height.revision_height != 0);
+        require(clientState.latest_height.revision_height != 0, "client state not found");
+        return clientState.latest_height;
     }
     /**
      * @dev getStatus returns the status of the client corresponding to `clientId`.
@@ -141,21 +123,24 @@ contract LCPClient is ILightClient {
     }
 
     /**
-     * @dev updateClient updates the client corresponding to `clientId`.
-     * If succeeded, it returns a commitment for the updated state.
-     * If there are no updates for consensus state, this function should returns an empty array as `updates`.
+     * @dev routeUpdateClient returns the calldata to the receiving function of the client message.
+     *      Light client contract may encode a client message as other encoding scheme(e.g. ethereum ABI)
+     *      Check ADR-001 for details.
      */
-    function updateClient(string calldata clientId, bytes calldata clientMessageBytes)
-        public
-        onlyIBC
-        returns (bytes32 clientStateCommitment, ConsensusStateUpdate[] memory updates, bool ok)
+    function routeUpdateClient(string calldata clientId, bytes calldata protoClientMessage)
+        external
+        pure
+        returns (bytes4 selector, bytes memory args)
     {
-        Any.Data memory anyClientMessage = Any.decode(clientMessageBytes);
+        Any.Data memory anyClientMessage = Any.decode(protoClientMessage);
         bytes32 typeUrlHash = keccak256(abi.encodePacked(anyClientMessage.type_url));
         if (typeUrlHash == LCPProtoMarshaler.UPDATE_CLIENT_MESSAGE_TYPE_URL_HASH) {
-            return updateState(clientId, UpdateClientMessage.decode(anyClientMessage.value));
+            return (this.updateState.selector, abi.encode(clientId, UpdateClientMessage.decode(anyClientMessage.value)));
         } else if (typeUrlHash == LCPProtoMarshaler.REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL_HASH) {
-            return registerEnclaveKey(clientId, RegisterEnclaveKeyMessage.decode(anyClientMessage.value));
+            return (
+                this.registerEnclaveKey.selector,
+                abi.encode(clientId, RegisterEnclaveKeyMessage.decode(anyClientMessage.value))
+            );
         } else {
             revert("unknown type url");
         }
@@ -238,7 +223,7 @@ contract LCPClient is ILightClient {
      * @dev getClientState returns the clientState corresponding to `clientId`.
      *      If it's not found, the function returns false.
      */
-    function getClientState(string calldata clientId) public view returns (bytes memory clientStateBytes, bool) {
+    function getClientState(string calldata clientId) external view returns (bytes memory clientStateBytes, bool) {
         ClientState.Data storage clientState = clientStates[clientId];
         if (clientState.latest_height.revision_height == 0) {
             return (clientStateBytes, false);
@@ -251,7 +236,7 @@ contract LCPClient is ILightClient {
      *      If it's not found, the function returns false.
      */
     function getConsensusState(string calldata clientId, Height.Data calldata height)
-        public
+        external
         view
         returns (bytes memory consensusStateBytes, bool)
     {
@@ -262,9 +247,9 @@ contract LCPClient is ILightClient {
         return (LCPProtoMarshaler.marshal(consensusState), true);
     }
 
-    function updateState(string calldata clientId, UpdateClientMessage.Data memory message)
-        internal
-        returns (bytes32 clientStateCommitment, ConsensusStateUpdate[] memory updates, bool ok)
+    function updateState(string calldata clientId, UpdateClientMessage.Data calldata message)
+        public
+        returns (Height.Data[] memory heights)
     {
         require(message.signer.length == 20, "invalid signer length");
         require(message.signature.length == 65, "invalid signature length");
@@ -300,28 +285,14 @@ contract LCPClient is ILightClient {
         consensusState.state_id = abi.encodePacked(commitment.postStateId);
         consensusState.timestamp = uint64(commitment.timestamp);
 
-        /* Make updates message */
-
-        updates = new ConsensusStateUpdate[](1);
-        updates[0] = ConsensusStateUpdate({
-            consensusStateCommitment: keccak256(LCPProtoMarshaler.marshal(consensusState)),
-            height: commitment.postHeight
-        });
-
-        return (keccak256(LCPProtoMarshaler.marshal(clientState)), updates, true);
+        heights = new Height.Data[](1);
+        heights[0] = commitment.postHeight;
+        return heights;
     }
 
-    function isActiveKey(string calldata clientId, address signer) internal view returns (bool) {
-        uint256 expiredAt = enclaveKeys[clientId][signer];
-        if (expiredAt == 0) {
-            return false;
-        }
-        return expiredAt > block.timestamp;
-    }
-
-    function registerEnclaveKey(string calldata clientId, RegisterEnclaveKeyMessage.Data memory message)
-        internal
-        returns (bytes32 clientStateCommitment, ConsensusStateUpdate[] memory updates, bool ok)
+    function registerEnclaveKey(string calldata clientId, RegisterEnclaveKeyMessage.Data calldata message)
+        public
+        returns (Height.Data[] memory heights)
     {
         {
             AVRValidator.RSAParams storage params = verifiedSigningRSAParams[keccak256(message.signing_cert)];
@@ -363,14 +334,22 @@ contract LCPClient is ILightClient {
         if (enclaveKeys[clientId][enclaveKey] != 0) {
             require(enclaveKeys[clientId][enclaveKey] == expiredAt, "expiredAt mismatch");
             // NOTE: if the key already exists, don't update any state
-            return (bytes32(0), updates, true);
+            return heights;
         }
 
         enclaveKeys[clientId][enclaveKey] = expiredAt;
         emit RegisteredEnclaveKey(clientId, enclaveKey, expiredAt);
 
         // Note: client and consensus state are not always updated in registerEnclaveKey
-        return (bytes32(0), updates, true);
+        return heights;
+    }
+
+    function isActiveKey(string calldata clientId, address signer) internal view returns (bool) {
+        uint256 expiredAt = enclaveKeys[clientId][signer];
+        if (expiredAt == 0) {
+            return false;
+        }
+        return expiredAt > block.timestamp;
     }
 
     function verifyCommitmentProof(bytes32 commitment, bytes memory signature, address signer)

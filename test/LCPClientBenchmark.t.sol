@@ -19,9 +19,7 @@ abstract contract BaseLCPClientBenchmark is BasicTest {
     function createClient() internal {
         ClientState.Data memory clientState = createInitialState(commandAvrFile);
         ConsensusState.Data memory consensusState;
-        (,, bool ok) =
-            lc.createClient(clientId, LCPProtoMarshaler.marshal(clientState), LCPProtoMarshaler.marshal(consensusState));
-        require(ok, "failed to create client");
+        lc.initializeClient(clientId, LCPProtoMarshaler.marshal(clientState), LCPProtoMarshaler.marshal(consensusState));
     }
 
     function generateClientId(uint64 clientCounter) internal pure returns (string memory) {
@@ -69,39 +67,6 @@ contract BLCPClient is LCPClient {
         LCPClient(ibcHandler_, rootCACert, developmentMode_)
     {}
 
-    /**
-     * @dev Define wrapper function to avoid confusion with the gas cost with the `updateClient` in `setup`.
-     */
-    function registerEnclaveKeyNoCache(string calldata clientId, bytes calldata clientMessageBytes)
-        external
-        onlyIBC
-        returns (bytes32 clientStateCommitment, ConsensusStateUpdate[] memory updates, bool ok)
-    {
-        return updateClient(clientId, clientMessageBytes);
-    }
-
-    /**
-     * @dev Define wrapper function to avoid confusion with the gas cost with the `updateClient` in `setup`.
-     */
-    function registerEnclaveKeyCache(string calldata clientId, bytes calldata clientMessageBytes)
-        external
-        onlyIBC
-        returns (bytes32 clientStateCommitment, ConsensusStateUpdate[] memory updates, bool ok)
-    {
-        return updateClient(clientId, clientMessageBytes);
-    }
-
-    /**
-     * @dev Define wrapper function to avoid confusion with the gas cost with the `updateClient` in `setup`.
-     */
-    function updateState(string calldata clientId, bytes calldata clientMessageBytes)
-        external
-        onlyIBC
-        returns (bytes32 clientStateCommitment, ConsensusStateUpdate[] memory updates, bool ok)
-    {
-        return updateClient(clientId, clientMessageBytes);
-    }
-
     function setSigningRSAParams(bytes32 signingCertHash, AVRValidator.RSAParams calldata params) public {
         verifiedSigningRSAParams[signingCertHash] = params;
     }
@@ -117,10 +82,8 @@ contract NoCacheEnclaveRegistrationBenchmark is BaseLCPClientBenchmark {
 
     function testRegisterEnclaveKey() public {
         vm.warp(1703138378);
-        bytes memory message = LCPProtoMarshaler.marshal(createRegisterEnclaveKeyMessage(commandAvrFile));
-        (, ConsensusStateUpdate[] memory updates, bool ok) = lc.registerEnclaveKeyNoCache(clientId, message);
-        require(ok, "failed to register enclave key");
-        require(updates.length == 0);
+        Height.Data[] memory heights = lc.registerEnclaveKey(clientId, createRegisterEnclaveKeyMessage(commandAvrFile));
+        require(heights.length == 0);
     }
 }
 
@@ -142,10 +105,8 @@ contract CachedEnclaveRegistrationBenchmark is BaseLCPClientBenchmark {
 
     function testRegisterEnclaveKey() public {
         vm.warp(1703138378);
-        bytes memory message = LCPProtoMarshaler.marshal(createRegisterEnclaveKeyMessage(commandAvrFile));
-        (, ConsensusStateUpdate[] memory updates, bool ok) = lc.registerEnclaveKeyCache(clientId, message);
-        require(ok, "failed to register enclave key");
-        require(updates.length == 0);
+        Height.Data[] memory heights = lc.registerEnclaveKey(clientId, createRegisterEnclaveKeyMessage(commandAvrFile));
+        require(heights.length == 0);
     }
 }
 
@@ -156,23 +117,16 @@ contract UpdateClientBenchmark is BaseLCPClientBenchmark {
         clientId = generateClientId(1);
         createClient();
 
-        bytes memory message = LCPProtoMarshaler.marshal(createRegisterEnclaveKeyMessage(commandAvrFile));
-        (, ConsensusStateUpdate[] memory updates, bool ok) = lc.updateClient(clientId, message);
-        (clientId, message);
-        require(ok, "failed to register enclave key");
-        require(updates.length == 0);
+        Height.Data[] memory heights = lc.registerEnclaveKey(clientId, createRegisterEnclaveKeyMessage(commandAvrFile));
+        require(heights.length == 0);
 
-        message = LCPProtoMarshaler.marshal(createUpdateClientMessage("test/data/client/02/004-update_client"));
-        (, updates, ok) = lc.updateClient(clientId, message);
-        require(ok, "failed to update client");
-        require(updates.length == 1, "updates length must be 1");
+        heights = lc.updateState(clientId, createUpdateClientMessage("test/data/client/02/004-update_client"));
+        require(heights.length == 1, "heights length must be 1");
     }
 
     function testUpdateClient() public {
-        bytes memory message =
-            LCPProtoMarshaler.marshal(createUpdateClientMessage("test/data/client/02/007-update_client"));
-        (, ConsensusStateUpdate[] memory updates, bool ok) = lc.updateState(clientId, message);
-        require(ok, "failed to update client");
-        require(updates.length == 1, "updates length must be 1");
+        Height.Data[] memory heights =
+            lc.updateState(clientId, createUpdateClientMessage("test/data/client/02/007-update_client"));
+        require(heights.length == 1, "heights length must be 1");
     }
 }
