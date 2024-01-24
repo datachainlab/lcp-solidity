@@ -157,7 +157,7 @@ contract LCPClientTest is BasicTest {
         internal
         returns (UpdateClientMessage.Data memory message)
     {
-        message.commitment =
+        message.elc_message =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".message");
         message.signer =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".signer");

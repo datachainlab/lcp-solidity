@@ -9,7 +9,7 @@ library IbcLightclientsLcpV1UpdateClientMessage {
 
   //struct definition
   struct Data {
-    bytes commitment;
+    bytes elc_message;
     bytes signer;
     bytes signature;
   }
@@ -60,7 +60,7 @@ library IbcLightclientsLcpV1UpdateClientMessage {
       (fieldId, wireType, bytesRead) = ProtoBufRuntime._decode_key(pointer, bs);
       pointer += bytesRead;
       if (fieldId == 1) {
-        pointer += _read_commitment(pointer, bs, r);
+        pointer += _read_elc_message(pointer, bs, r);
       } else
       if (fieldId == 2) {
         pointer += _read_signer(pointer, bs, r);
@@ -85,13 +85,13 @@ library IbcLightclientsLcpV1UpdateClientMessage {
    * @param r The in-memory struct
    * @return The number of bytes decoded
    */
-  function _read_commitment(
+  function _read_elc_message(
     uint256 p,
     bytes memory bs,
     Data memory r
   ) internal pure returns (uint) {
     (bytes memory x, uint256 sz) = ProtoBufRuntime._decode_bytes(p, bs);
-    r.commitment = x;
+    r.elc_message = x;
     return sz;
   }
 
@@ -162,14 +162,14 @@ library IbcLightclientsLcpV1UpdateClientMessage {
     uint256 offset = p;
     uint256 pointer = p;
     
-    if (r.commitment.length != 0) {
+    if (r.elc_message.length != 0) {
     pointer += ProtoBufRuntime._encode_key(
       1,
       ProtoBufRuntime.WireType.LengthDelim,
       pointer,
       bs
     );
-    pointer += ProtoBufRuntime._encode_bytes(r.commitment, pointer, bs);
+    pointer += ProtoBufRuntime._encode_bytes(r.elc_message, pointer, bs);
     }
     if (r.signer.length != 0) {
     pointer += ProtoBufRuntime._encode_key(
@@ -232,7 +232,7 @@ library IbcLightclientsLcpV1UpdateClientMessage {
     Data memory r
   ) internal pure returns (uint) {
     uint256 e;
-    e += 1 + ProtoBufRuntime._sz_lendelim(r.commitment.length);
+    e += 1 + ProtoBufRuntime._sz_lendelim(r.elc_message.length);
     e += 1 + ProtoBufRuntime._sz_lendelim(r.signer.length);
     e += 1 + ProtoBufRuntime._sz_lendelim(r.signature.length);
     return e;
@@ -243,7 +243,7 @@ library IbcLightclientsLcpV1UpdateClientMessage {
     Data memory r
   ) internal pure returns (bool) {
     
-  if (r.commitment.length != 0) {
+  if (r.elc_message.length != 0) {
     return false;
   }
 
@@ -266,7 +266,7 @@ library IbcLightclientsLcpV1UpdateClientMessage {
    * @param output The in-storage struct
    */
   function store(Data memory input, Data storage output) internal {
-    output.commitment = input.commitment;
+    output.elc_message = input.elc_message;
     output.signer = input.signer;
     output.signature = input.signature;
 
