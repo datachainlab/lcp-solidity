@@ -150,7 +150,8 @@ contract LCPCommitmentTest is BasicTest {
 
         for (uint256 i = 0; i < testCases.length; i++) {
             UpdateClientMessageEmptyValidationContextTestCase memory testCase = testCases[i];
-            LCPCommitment.UpdateClientMessage memory c = LCPCommitment.parseUpdateClientMessage(testCase.message);
+            LCPCommitment.UpdateClientMessage memory c =
+                LCPCommitmentTestHelper.parseUpdateClientMessage(testCase.message);
             assertEq(c.prevHeight.revision_number, testCase.expected.prevHeight.revision_number);
             assertEq(c.prevHeight.revision_height, testCase.expected.prevHeight.revision_height);
             assertEq(c.postHeight.revision_number, testCase.expected.postHeight.revision_number);
@@ -249,7 +250,8 @@ contract LCPCommitmentTest is BasicTest {
 
         for (uint256 i = 0; i < testCases.length; i++) {
             UpdateClientMessageTestCase memory testCase = testCases[i];
-            LCPCommitment.UpdateClientMessage memory c = LCPCommitment.parseUpdateClientMessage(testCase.message);
+            LCPCommitment.UpdateClientMessage memory c =
+                LCPCommitmentTestHelper.parseUpdateClientMessage(testCase.message);
             assertEq(c.prevHeight.revision_number, testCase.expected.prevHeight.revision_number);
             assertEq(c.prevHeight.revision_height, testCase.expected.prevHeight.revision_height);
             assertEq(c.postHeight.revision_number, testCase.expected.postHeight.revision_number);

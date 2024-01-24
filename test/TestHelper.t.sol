@@ -70,6 +70,14 @@ library LCPCommitmentTestHelper {
         LCPCommitment.trustingPeriodContextEval(context, currentTimestampNanos);
     }
 
+    function parseUpdateClientMessage(bytes calldata commitmentBytes)
+        public
+        pure
+        returns (LCPCommitment.UpdateClientMessage memory commitment)
+    {
+        return LCPCommitment.parseUpdateClientMessage(commitmentBytes);
+    }
+
     function parseVerifyMembershipCommitmentProof(bytes calldata proofBytes)
         public
         pure
