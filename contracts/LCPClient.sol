@@ -7,8 +7,8 @@ import "@hyperledger-labs/yui-ibc-solidity/contracts/proto/Client.sol";
 import {GoogleProtobufAny as Any} from "@hyperledger-labs/yui-ibc-solidity/contracts/proto/GoogleProtobufAny.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {
-    IbcLightclientsLcpV1ClientState as ClientState,
-    IbcLightclientsLcpV1ConsensusState as ConsensusState,
+    IbcLightclientsLcpV1ClientState as ProtoClientState,
+    IbcLightclientsLcpV1ConsensusState as ProtoConsensusState,
     IbcLightclientsLcpV1RegisterEnclaveKeyMessage as RegisterEnclaveKeyMessage,
     IbcLightclientsLcpV1UpdateClientMessage as UpdateClientMessage
 } from "./proto/ibc/lightclients/lcp/v1/LCP.sol";
@@ -20,14 +20,19 @@ import "./AVRValidator.sol";
 contract LCPClient is ILightClient {
     using IBCHeight for Height.Data;
 
+    struct ConsensusState {
+        bytes32 stateId;
+        uint64 timestamp;
+    }
+
     event RegisteredEnclaveKey(string clientId, address enclaveKey, uint256 expiredAt);
 
     address immutable ibcHandler;
     // if developmentMode is true, the client allows the remote attestation of IAS in development.
     bool immutable developmentMode;
 
-    mapping(string => ClientState.Data) internal clientStates;
-    mapping(string => mapping(uint128 => ConsensusState.Data)) internal consensusStates;
+    mapping(string => ProtoClientState.Data) internal clientStates;
+    mapping(string => mapping(uint128 => ConsensusState)) internal consensusStates;
 
     // rootCA's public key parameters
     AVRValidator.RSAParams public verifiedRootCAParams;
@@ -66,8 +71,8 @@ contract LCPClient is ILightClient {
         bytes calldata protoClientState,
         bytes calldata protoConsensusState
     ) external onlyIBC returns (Height.Data memory height) {
-        ClientState.Data memory clientState = LCPProtoMarshaler.unmarshalClientState(protoClientState);
-        ConsensusState.Data memory consensusState = LCPProtoMarshaler.unmarshalConsensusState(protoConsensusState);
+        ProtoClientState.Data memory clientState = LCPProtoMarshaler.unmarshalClientState(protoClientState);
+        ProtoConsensusState.Data memory consensusState = LCPProtoMarshaler.unmarshalConsensusState(protoConsensusState);
 
         // validate an initial state
         require(
@@ -100,7 +105,7 @@ contract LCPClient is ILightClient {
         view
         returns (uint64)
     {
-        ConsensusState.Data storage consensusState = consensusStates[clientId][height.toUint128()];
+        ConsensusState storage consensusState = consensusStates[clientId][height.toUint128()];
         require(consensusState.timestamp != 0, "consensus state not found");
         return consensusState.timestamp;
     }
@@ -109,7 +114,7 @@ contract LCPClient is ILightClient {
      * @dev getLatestHeight returns the latest height of the client state corresponding to `clientId`.
      */
     function getLatestHeight(string calldata clientId) external view returns (Height.Data memory) {
-        ClientState.Data storage clientState = clientStates[clientId];
+        ProtoClientState.Data storage clientState = clientStates[clientId];
         require(clientState.latest_height.revision_height != 0, "client state not found");
         return clientState.latest_height;
     }
@@ -164,14 +169,14 @@ contract LCPClient is ILightClient {
             LCPCommitment.parseVerifyMembershipCommitmentProof(proof);
         require(commitmentProof.signature.length == 65, "invalid signature length");
 
-        ConsensusState.Data storage consensusState = consensusStates[clientId][message.height.toUint128()];
-        require(consensusState.state_id.length != 0, "consensus state not found");
+        ConsensusState storage consensusState = consensusStates[clientId][message.height.toUint128()];
+        require(consensusState.stateId != bytes32(0), "consensus state not found");
 
         require(height.eq(message.height), "invalid height");
         require(keccak256(prefix) == keccak256(message.prefix));
         require(keccak256(path) == keccak256(message.path));
         require(keccak256(value) == message.value, "invalid commitment value");
-        require(bytes32(consensusState.state_id) == message.stateId, "invalid state_id");
+        require(consensusState.stateId == message.stateId, "invalid state_id");
         require(isActiveKey(clientId, commitmentProof.signer), "the key isn't active");
         require(
             verifyCommitmentProof(
@@ -200,14 +205,14 @@ contract LCPClient is ILightClient {
             LCPCommitment.parseVerifyMembershipCommitmentProof(proof);
         require(commitmentProof.signature.length == 65, "invalid signature length");
 
-        ConsensusState.Data storage consensusState = consensusStates[clientId][message.height.toUint128()];
-        require(consensusState.state_id.length != 0, "consensus state not found");
+        ConsensusState storage consensusState = consensusStates[clientId][message.height.toUint128()];
+        require(consensusState.stateId != bytes32(0), "consensus state not found");
 
         require(height.eq(message.height), "invalid height");
         require(keccak256(prefix) == keccak256(message.prefix));
         require(keccak256(path) == keccak256(message.path));
         require(bytes32(0) == message.value, "invalid commitment value");
-        require(bytes32(consensusState.state_id) == message.stateId, "invalid state_id");
+        require(consensusState.stateId == message.stateId, "invalid state_id");
         require(isActiveKey(clientId, commitmentProof.signer), "the key isn't active");
         require(
             verifyCommitmentProof(
@@ -224,7 +229,7 @@ contract LCPClient is ILightClient {
      *      If it's not found, the function returns false.
      */
     function getClientState(string calldata clientId) external view returns (bytes memory clientStateBytes, bool) {
-        ClientState.Data storage clientState = clientStates[clientId];
+        ProtoClientState.Data storage clientState = clientStates[clientId];
         if (clientState.latest_height.revision_height == 0) {
             return (clientStateBytes, false);
         }
@@ -240,11 +245,19 @@ contract LCPClient is ILightClient {
         view
         returns (bytes memory consensusStateBytes, bool)
     {
-        ConsensusState.Data storage consensusState = consensusStates[clientId][height.toUint128()];
-        if (consensusState.timestamp == 0 && consensusState.state_id.length == 0) {
+        ConsensusState storage consensusState = consensusStates[clientId][height.toUint128()];
+        if (consensusState.timestamp == 0 && consensusState.stateId == bytes32(0)) {
             return (consensusStateBytes, false);
         }
-        return (LCPProtoMarshaler.marshal(consensusState), true);
+        return (
+            LCPProtoMarshaler.marshal(
+                ProtoConsensusState.Data({
+                    timestamp: consensusState.timestamp,
+                    state_id: abi.encodePacked(consensusState.stateId)
+                })
+                ),
+            true
+        );
     }
 
     function updateState(string calldata clientId, UpdateClientMessage.Data calldata message)
@@ -254,18 +267,16 @@ contract LCPClient is ILightClient {
         require(message.signer.length == 20, "invalid signer length");
         require(message.signature.length == 65, "invalid signature length");
 
-        ClientState.Data storage clientState = clientStates[clientId];
-        ConsensusState.Data storage consensusState;
+        ProtoClientState.Data storage clientState = clientStates[clientId];
+        ConsensusState storage consensusState;
 
         LCPCommitment.UpdateClientMessage memory commitment = LCPCommitment.parseUpdateClientMessage(message.commitment);
         if (clientState.latest_height.revision_number == 0 && clientState.latest_height.revision_height == 0) {
-            require(commitment.emittedStates.length != 0, "the commitment's `EmittedStates` must be non-nil");
+            require(commitment.emittedStates.length != 0, "EmittedStates must be non-nil");
         } else {
             consensusState = consensusStates[clientId][commitment.prevHeight.toUint128()];
-            require(
-                consensusState.timestamp != 0 && bytes32(consensusState.state_id) == commitment.prevStateId,
-                "unexpected StateID"
-            );
+            require(commitment.prevStateId != bytes32(0), "PrevStateID must be non-nil");
+            require(consensusState.stateId == commitment.prevStateId, "unexpected StateID");
         }
 
         LCPCommitment.validationContextEval(commitment.context, block.timestamp * 1e9);
@@ -282,7 +293,7 @@ contract LCPClient is ILightClient {
         }
 
         consensusState = consensusStates[clientId][commitment.postHeight.toUint128()];
-        consensusState.state_id = abi.encodePacked(commitment.postStateId);
+        consensusState.stateId = commitment.postStateId;
         consensusState.timestamp = uint64(commitment.timestamp);
 
         heights = new Height.Data[](1);
@@ -320,7 +331,7 @@ contract LCPClient is ILightClient {
             );
         }
 
-        ClientState.Data storage clientState = clientStates[clientId];
+        ProtoClientState.Data storage clientState = clientStates[clientId];
         (address enclaveKey, bytes memory attestationTimeBytes, bytes32 mrenclave) = AVRValidator
             .validateAndExtractElements(
             developmentMode, bytes(message.report), allowedQuoteStatuses[clientId], allowedAdvisories[clientId]
