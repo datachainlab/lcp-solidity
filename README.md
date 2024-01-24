@@ -8,9 +8,9 @@ An e2e demo is available [here](https://github.com/datachainlab/cosmos-ethereum-
 
 ## Gas cost
 
-- registerEnclaveKey: 550k: first registration in the client or signing key changed(very rare)
-- registerEnclaveKey: 210k
-- updateState: 190k
+- registerEnclaveKey: 500k: first registration in the client or signing key changed(very rare)
+- registerEnclaveKey: 160k
+- updateState: 100k
 - verifyMembership: 15k
 - verifyNonMembership: 14k
 

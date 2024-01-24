@@ -30,7 +30,7 @@ library LCPCommitment {
         bytes state;
     }
 
-    function parseUpdateClientMessage(bytes memory commitmentBytes)
+    function parseUpdateClientMessage(bytes calldata commitmentBytes)
         internal
         pure
         returns (UpdateClientMessage memory commitment)
