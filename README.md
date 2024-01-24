@@ -10,7 +10,7 @@ An e2e demo is available [here](https://github.com/datachainlab/cosmos-ethereum-
 
 - registerEnclaveKey: 500k: first registration in the client or signing key changed(very rare)
 - registerEnclaveKey: 160k
-- updateState: 100k
+- updateState: 71k
 - verifyMembership: 15k
 - verifyNonMembership: 14k
 
