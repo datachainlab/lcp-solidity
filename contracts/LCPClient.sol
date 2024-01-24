@@ -270,34 +270,34 @@ contract LCPClient is ILightClient {
         ProtoClientState.Data storage clientState = clientStates[clientId];
         ConsensusState storage consensusState;
 
-        LCPCommitment.UpdateClientMessage memory commitment = LCPCommitment.parseUpdateClientMessage(message.commitment);
+        LCPCommitment.UpdateClientMessage memory emsg = LCPCommitment.parseUpdateClientMessage(message.elc_message);
         if (clientState.latest_height.revision_number == 0 && clientState.latest_height.revision_height == 0) {
-            require(commitment.emittedStates.length != 0, "EmittedStates must be non-nil");
+            require(emsg.emittedStates.length != 0, "EmittedStates must be non-nil");
         } else {
-            consensusState = consensusStates[clientId][commitment.prevHeight.toUint128()];
-            require(commitment.prevStateId != bytes32(0), "PrevStateID must be non-nil");
-            require(consensusState.stateId == commitment.prevStateId, "unexpected StateID");
+            consensusState = consensusStates[clientId][emsg.prevHeight.toUint128()];
+            require(emsg.prevStateId != bytes32(0), "PrevStateID must be non-nil");
+            require(consensusState.stateId == emsg.prevStateId, "unexpected StateID");
         }
 
-        LCPCommitment.validationContextEval(commitment.context, block.timestamp * 1e9);
+        LCPCommitment.validationContextEval(emsg.context, block.timestamp * 1e9);
 
         require(isActiveKey(clientId, address(bytes20(message.signer))), "the key isn't active");
 
         require(
-            verifyCommitmentProof(keccak256(message.commitment), message.signature, address(bytes20(message.signer))),
+            verifyCommitmentProof(keccak256(message.elc_message), message.signature, address(bytes20(message.signer))),
             "failed to verify the commitment"
         );
 
-        if (clientState.latest_height.lt(commitment.postHeight)) {
-            clientState.latest_height = commitment.postHeight;
+        if (clientState.latest_height.lt(emsg.postHeight)) {
+            clientState.latest_height = emsg.postHeight;
         }
 
-        consensusState = consensusStates[clientId][commitment.postHeight.toUint128()];
-        consensusState.stateId = commitment.postStateId;
-        consensusState.timestamp = uint64(commitment.timestamp);
+        consensusState = consensusStates[clientId][emsg.postHeight.toUint128()];
+        consensusState.stateId = emsg.postStateId;
+        consensusState.timestamp = uint64(emsg.timestamp);
 
         heights = new Height.Data[](1);
-        heights[0] = commitment.postHeight;
+        heights[0] = emsg.postHeight;
         return heights;
     }
 
