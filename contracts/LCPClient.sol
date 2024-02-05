@@ -285,7 +285,7 @@ contract LCPClient is ILightClient {
     }
 
     function updateState(string calldata clientId, LCPCommitment.UpdateStateProxyMessage memory pmsg)
-        private
+        internal
         returns (Height.Data[] memory heights)
     {
         ProtoClientState.Data storage clientState = clientStates[clientId];
@@ -317,7 +317,7 @@ contract LCPClient is ILightClient {
     }
 
     function submitMisbehaviour(string calldata clientId, LCPCommitment.MisbehaviourProxyMessage memory pmsg)
-        private
+        internal
         returns (Height.Data[] memory heights)
     {
         ProtoClientState.Data storage clientState = clientStates[clientId];
