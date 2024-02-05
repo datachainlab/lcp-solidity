@@ -33,6 +33,17 @@ library LCPCommitment {
         EmittedState[] emittedStates;
     }
 
+    struct MisbehaviourProxyMessage {
+        PrevState[] prevStates;
+        bytes context;
+        bytes clientMessage;
+    }
+
+    struct PrevState {
+        Height.Data height;
+        bytes32 stateId;
+    }
+
     struct EmittedState {
         Height.Data height;
         bytes state;

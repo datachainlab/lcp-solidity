@@ -278,7 +278,7 @@ contract LCPClient is ILightClient {
         if (hm.header == LCPCommitment.LCP_MESSAGE_HEADER_UPDATE_STATE) {
             return updateState(clientId, abi.decode(hm.message, (LCPCommitment.UpdateStateProxyMessage)));
         } else if (hm.header == LCPCommitment.LCP_MESSAGE_HEADER_MISBEHAVIOUR) {
-            revert("not implemented yet");
+            return submitMisbehaviour(clientId, abi.decode(hm.message, (LCPCommitment.MisbehaviourProxyMessage)));
         } else {
             revert("unexpected header");
         }
@@ -313,6 +313,28 @@ contract LCPClient is ILightClient {
 
         heights = new Height.Data[](1);
         heights[0] = pmsg.postHeight;
+        return heights;
+    }
+
+    function submitMisbehaviour(string calldata clientId, LCPCommitment.MisbehaviourProxyMessage memory pmsg)
+        private
+        returns (Height.Data[] memory heights)
+    {
+        ProtoClientState.Data storage clientState = clientStates[clientId];
+        ConsensusState storage consensusState;
+
+        require(!clientState.frozen, "client state must not be frozen");
+        require(pmsg.prevStates.length != 0, "PrevStates must be non-nil");
+
+        for (uint256 i = 0; i < pmsg.prevStates.length; i++) {
+            consensusState = consensusStates[clientId][pmsg.prevStates[i].height.toUint128()];
+            require(pmsg.prevStates[i].stateId != bytes32(0), "stateId must be non-nil");
+            require(consensusState.stateId == pmsg.prevStates[i].stateId, "unexpected StateID");
+        }
+
+        LCPCommitment.validationContextEval(pmsg.context, block.timestamp * 1e9);
+
+        clientState.frozen = true;
         return heights;
     }
 
