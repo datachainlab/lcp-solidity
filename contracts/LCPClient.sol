@@ -79,6 +79,7 @@ contract LCPClient is ILightClient {
             clientState.latest_height.revision_number == 0 && clientState.latest_height.revision_height == 0,
             "invalid initial height"
         );
+        require(!clientState.frozen, "client state must not be frozen");
         require(clientState.key_expiration != 0, "key_expiration must be non-zero");
         require(clientState.mrenclave.length == 32, "invalid mrenclave length");
         require(consensusState.timestamp == 0 && consensusState.state_id.length == 0, "invalid consensus state");
@@ -122,9 +123,8 @@ contract LCPClient is ILightClient {
      * @dev getStatus returns the status of the client corresponding to `clientId`.
      */
 
-    function getStatus(string calldata) external view returns (ClientStatus) {
-        // TODO: should return the correct status after implementing the misbehavior detection
-        return ClientStatus.Active;
+    function getStatus(string calldata clientId) external view returns (ClientStatus) {
+        return clientStates[clientId].frozen ? ClientStatus.Frozen : ClientStatus.Active;
     }
 
     /**
@@ -270,7 +270,9 @@ contract LCPClient is ILightClient {
         ProtoClientState.Data storage clientState = clientStates[clientId];
         ConsensusState storage consensusState;
 
-        LCPCommitment.UpdateClientMessage memory emsg = LCPCommitment.parseUpdateClientMessage(message.elc_message);
+        require(!clientState.frozen, "client state must not be frozen");
+
+        LCPCommitment.UpdateClientMessage memory emsg = LCPCommitment.parseUpdateClientMessage(message.proxy_message);
         if (clientState.latest_height.revision_number == 0 && clientState.latest_height.revision_height == 0) {
             require(emsg.emittedStates.length != 0, "EmittedStates must be non-nil");
         } else {
@@ -284,7 +286,7 @@ contract LCPClient is ILightClient {
         require(isActiveKey(clientId, address(bytes20(message.signer))), "the key isn't active");
 
         require(
-            verifyCommitmentProof(keccak256(message.elc_message), message.signature, address(bytes20(message.signer))),
+            verifyCommitmentProof(keccak256(message.proxy_message), message.signature, address(bytes20(message.signer))),
             "failed to verify the commitment"
         );
 

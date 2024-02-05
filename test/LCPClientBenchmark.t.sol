@@ -33,6 +33,7 @@ abstract contract BaseLCPClientBenchmark is BasicTest {
         // Note `latest_height` must be zero height
         clientState.mrenclave = mrenclave;
         clientState.key_expiration = 60 * 60 * 24 * 7;
+        clientState.frozen = false;
 
         // WARNING: the following configuration is for testing purpose only
         clientState.allowed_quote_statuses = new string[](1);
@@ -53,7 +54,7 @@ abstract contract BaseLCPClientBenchmark is BasicTest {
         internal
         returns (UpdateClientMessage.Data memory message)
     {
-        message.elc_message =
+        message.proxy_message =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".message");
         message.signer =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".signer");
