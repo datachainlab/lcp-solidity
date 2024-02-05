@@ -85,4 +85,12 @@ library LCPCommitmentTestHelper {
     {
         return LCPCommitment.parseVerifyMembershipCommitmentProof(proofBytes);
     }
+
+    function parseMisbehaviourProxyMessage(bytes calldata messageBytes)
+        public
+        pure
+        returns (LCPCommitment.MisbehaviourProxyMessage memory)
+    {
+        return LCPCommitment.parseMisbehaviourProxyMessage(messageBytes);
+    }
 }

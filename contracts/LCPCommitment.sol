@@ -33,17 +33,6 @@ library LCPCommitment {
         EmittedState[] emittedStates;
     }
 
-    struct MisbehaviourProxyMessage {
-        PrevState[] prevStates;
-        bytes context;
-        bytes clientMessage;
-    }
-
-    struct PrevState {
-        Height.Data height;
-        bytes32 stateId;
-    }
-
     struct EmittedState {
         Height.Data height;
         bytes state;
@@ -61,6 +50,31 @@ library LCPCommitment {
         // 4-31: reserved
         require(hm.header == LCP_MESSAGE_HEADER_UPDATE_STATE, "unexpected header");
         return abi.decode(hm.message, (UpdateStateProxyMessage));
+    }
+
+    struct MisbehaviourProxyMessage {
+        PrevState[] prevStates;
+        bytes context;
+        bytes clientMessage;
+    }
+
+    struct PrevState {
+        Height.Data height;
+        bytes32 stateId;
+    }
+
+    function parseMisbehaviourProxyMessage(bytes calldata messageBytes)
+        internal
+        pure
+        returns (MisbehaviourProxyMessage memory)
+    {
+        HeaderedProxyMessage memory hm = abi.decode(messageBytes, (HeaderedProxyMessage));
+        // MSB first
+        // 0-1:  version
+        // 2-3:  message type
+        // 4-31: reserved
+        require(hm.header == LCP_MESSAGE_HEADER_MISBEHAVIOUR, "unexpected header");
+        return abi.decode(hm.message, (MisbehaviourProxyMessage));
     }
 
     struct ValidationContext {
