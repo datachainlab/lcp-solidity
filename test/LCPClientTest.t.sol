@@ -97,7 +97,7 @@ contract LCPClientTest is BasicTest {
         for (uint256 i = 0; i < dataList.length; i++) {
             if (dataList[i].cmd == Command.UpdateClient) {
                 UpdateClientMessage.Data memory message = createUpdateClientMessage(dataList[i].path);
-                Height.Data[] memory heights = lc.updateState(clientId, message);
+                Height.Data[] memory heights = lc.updateClient(clientId, message);
                 require(heights.length == 1, "heights length must be 1");
                 console.log("revision_height:");
                 console.log(heights[0].revision_height);

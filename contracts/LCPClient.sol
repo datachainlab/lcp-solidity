@@ -139,7 +139,8 @@ contract LCPClient is ILightClient {
         Any.Data memory anyClientMessage = Any.decode(protoClientMessage);
         bytes32 typeUrlHash = keccak256(abi.encodePacked(anyClientMessage.type_url));
         if (typeUrlHash == LCPProtoMarshaler.UPDATE_CLIENT_MESSAGE_TYPE_URL_HASH) {
-            return (this.updateState.selector, abi.encode(clientId, UpdateClientMessage.decode(anyClientMessage.value)));
+            return
+                (this.updateClient.selector, abi.encode(clientId, UpdateClientMessage.decode(anyClientMessage.value)));
         } else if (typeUrlHash == LCPProtoMarshaler.REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL_HASH) {
             return (
                 this.registerEnclaveKey.selector,
@@ -259,20 +260,39 @@ contract LCPClient is ILightClient {
         );
     }
 
-    function updateState(string calldata clientId, UpdateClientMessage.Data calldata message)
+    function updateClient(string calldata clientId, UpdateClientMessage.Data calldata message)
         public
         returns (Height.Data[] memory heights)
     {
         require(message.signer.length == 20, "invalid signer length");
         require(message.signature.length == 65, "invalid signature length");
 
+        require(isActiveKey(clientId, address(bytes20(message.signer))), "the key isn't active");
+        require(
+            verifyCommitmentProof(keccak256(message.proxy_message), message.signature, address(bytes20(message.signer))),
+            "failed to verify the commitment"
+        );
+
+        LCPCommitment.HeaderedProxyMessage memory hm =
+            abi.decode(message.proxy_message, (LCPCommitment.HeaderedProxyMessage));
+        if (hm.header == LCPCommitment.LCP_MESSAGE_HEADER_UPDATE_STATE) {
+            return updateState(clientId, abi.decode(hm.message, (LCPCommitment.UpdateStateProxyMessage)));
+        } else if (hm.header == LCPCommitment.LCP_MESSAGE_HEADER_MISBEHAVIOUR) {
+            revert("not implemented yet");
+        } else {
+            revert("unexpected header");
+        }
+    }
+
+    function updateState(string calldata clientId, LCPCommitment.UpdateStateProxyMessage memory pmsg)
+        private
+        returns (Height.Data[] memory heights)
+    {
         ProtoClientState.Data storage clientState = clientStates[clientId];
         ConsensusState storage consensusState;
 
         require(!clientState.frozen, "client state must not be frozen");
 
-        LCPCommitment.UpdateStateProxyMessage memory pmsg =
-            LCPCommitment.parseUpdateStateProxyMessage(message.proxy_message);
         if (clientState.latest_height.revision_number == 0 && clientState.latest_height.revision_height == 0) {
             require(pmsg.emittedStates.length != 0, "EmittedStates must be non-nil");
         } else {
@@ -282,13 +302,6 @@ contract LCPClient is ILightClient {
         }
 
         LCPCommitment.validationContextEval(pmsg.context, block.timestamp * 1e9);
-
-        require(isActiveKey(clientId, address(bytes20(message.signer))), "the key isn't active");
-
-        require(
-            verifyCommitmentProof(keccak256(message.proxy_message), message.signature, address(bytes20(message.signer))),
-            "failed to verify the commitment"
-        );
 
         if (clientState.latest_height.lt(pmsg.postHeight)) {
             clientState.latest_height = pmsg.postHeight;
