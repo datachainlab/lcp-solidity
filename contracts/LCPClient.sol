@@ -84,7 +84,6 @@ contract LCPClient is ILightClient {
         require(clientState.mrenclave.length == 32, "invalid mrenclave length");
         require(consensusState.timestamp == 0 && consensusState.state_id.length == 0, "invalid consensus state");
 
-        // NOTE should we set only non-default values?
         clientStates[clientId] = clientState;
 
         // set allowed quote status and advisories
@@ -165,8 +164,10 @@ contract LCPClient is ILightClient {
         bytes memory path,
         bytes calldata value
     ) public view returns (bool) {
-        (LCPCommitment.CommitmentProof memory commitmentProof, LCPCommitment.VerifyMembershipMessage memory message) =
-            LCPCommitment.parseVerifyMembershipCommitmentProof(proof);
+        (
+            LCPCommitment.CommitmentProof memory commitmentProof,
+            LCPCommitment.VerifyMembershipProxyMessage memory message
+        ) = LCPCommitment.parseVerifyMembershipCommitmentProof(proof);
         require(commitmentProof.signature.length == 65, "invalid signature length");
 
         ConsensusState storage consensusState = consensusStates[clientId][message.height.toUint128()];
@@ -179,9 +180,7 @@ contract LCPClient is ILightClient {
         require(consensusState.stateId == message.stateId, "invalid state_id");
         require(isActiveKey(clientId, commitmentProof.signer), "the key isn't active");
         require(
-            verifyCommitmentProof(
-                keccak256(commitmentProof.commitment), commitmentProof.signature, commitmentProof.signer
-            ),
+            verifyCommitmentProof(keccak256(commitmentProof.message), commitmentProof.signature, commitmentProof.signer),
             "failed to verify signature"
         );
 
@@ -201,8 +200,10 @@ contract LCPClient is ILightClient {
         bytes calldata prefix,
         bytes calldata path
     ) public view returns (bool) {
-        (LCPCommitment.CommitmentProof memory commitmentProof, LCPCommitment.VerifyMembershipMessage memory message) =
-            LCPCommitment.parseVerifyMembershipCommitmentProof(proof);
+        (
+            LCPCommitment.CommitmentProof memory commitmentProof,
+            LCPCommitment.VerifyMembershipProxyMessage memory message
+        ) = LCPCommitment.parseVerifyMembershipCommitmentProof(proof);
         require(commitmentProof.signature.length == 65, "invalid signature length");
 
         ConsensusState storage consensusState = consensusStates[clientId][message.height.toUint128()];
@@ -215,9 +216,7 @@ contract LCPClient is ILightClient {
         require(consensusState.stateId == message.stateId, "invalid state_id");
         require(isActiveKey(clientId, commitmentProof.signer), "the key isn't active");
         require(
-            verifyCommitmentProof(
-                keccak256(commitmentProof.commitment), commitmentProof.signature, commitmentProof.signer
-            ),
+            verifyCommitmentProof(keccak256(commitmentProof.message), commitmentProof.signature, commitmentProof.signer),
             "failed to verify signature"
         );
 
@@ -272,16 +271,17 @@ contract LCPClient is ILightClient {
 
         require(!clientState.frozen, "client state must not be frozen");
 
-        LCPCommitment.UpdateClientMessage memory emsg = LCPCommitment.parseUpdateClientMessage(message.proxy_message);
+        LCPCommitment.UpdateStateProxyMessage memory pmsg =
+            LCPCommitment.parseUpdateStateProxyMessage(message.proxy_message);
         if (clientState.latest_height.revision_number == 0 && clientState.latest_height.revision_height == 0) {
-            require(emsg.emittedStates.length != 0, "EmittedStates must be non-nil");
+            require(pmsg.emittedStates.length != 0, "EmittedStates must be non-nil");
         } else {
-            consensusState = consensusStates[clientId][emsg.prevHeight.toUint128()];
-            require(emsg.prevStateId != bytes32(0), "PrevStateID must be non-nil");
-            require(consensusState.stateId == emsg.prevStateId, "unexpected StateID");
+            consensusState = consensusStates[clientId][pmsg.prevHeight.toUint128()];
+            require(pmsg.prevStateId != bytes32(0), "PrevStateID must be non-nil");
+            require(consensusState.stateId == pmsg.prevStateId, "unexpected StateID");
         }
 
-        LCPCommitment.validationContextEval(emsg.context, block.timestamp * 1e9);
+        LCPCommitment.validationContextEval(pmsg.context, block.timestamp * 1e9);
 
         require(isActiveKey(clientId, address(bytes20(message.signer))), "the key isn't active");
 
@@ -290,16 +290,16 @@ contract LCPClient is ILightClient {
             "failed to verify the commitment"
         );
 
-        if (clientState.latest_height.lt(emsg.postHeight)) {
-            clientState.latest_height = emsg.postHeight;
+        if (clientState.latest_height.lt(pmsg.postHeight)) {
+            clientState.latest_height = pmsg.postHeight;
         }
 
-        consensusState = consensusStates[clientId][emsg.postHeight.toUint128()];
-        consensusState.stateId = emsg.postStateId;
-        consensusState.timestamp = uint64(emsg.timestamp);
+        consensusState = consensusStates[clientId][pmsg.postHeight.toUint128()];
+        consensusState.stateId = pmsg.postStateId;
+        consensusState.timestamp = uint64(pmsg.timestamp);
 
         heights = new Height.Data[](1);
-        heights[0] = emsg.postHeight;
+        heights[0] = pmsg.postHeight;
         return heights;
     }
 

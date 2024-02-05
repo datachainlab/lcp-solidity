@@ -178,7 +178,7 @@ contract LCPClientTest is BasicTest {
     {
         value = readDecodedBytes(string(abi.encodePacked(verifyMembershipFilePrefix, commandInputSuffix)), ".value");
         {
-            bytes memory commitmentBytes =
+            bytes memory messageBytes =
                 readDecodedBytes(string(abi.encodePacked(verifyMembershipFilePrefix, commandResultSuffix)), ".message");
             bytes memory signer =
                 readDecodedBytes(string(abi.encodePacked(verifyMembershipFilePrefix, commandResultSuffix)), ".signer");
@@ -188,13 +188,13 @@ contract LCPClientTest is BasicTest {
             );
             proof = abi.encode(
                 LCPCommitment.CommitmentProof({
-                    commitment: commitmentBytes,
+                    message: messageBytes,
                     signer: address(bytes20(signer)),
                     signature: signature
                 })
             );
         }
-        (, LCPCommitment.VerifyMembershipMessage memory message) =
+        (, LCPCommitment.VerifyMembershipProxyMessage memory message) =
             LCPCommitmentTestHelper.parseVerifyMembershipCommitmentProof(proof);
         assert(message.value == keccak256(value));
 
@@ -207,7 +207,7 @@ contract LCPClientTest is BasicTest {
         internal
         returns (Height.Data memory height, bytes memory proof, bytes memory prefix, bytes memory path)
     {
-        bytes memory commitmentBytes =
+        bytes memory messageBytes =
             readDecodedBytes(string(abi.encodePacked(verifyNonMembershipFilePrefix, commandResultSuffix)), ".message");
         bytes memory signer =
             readDecodedBytes(string(abi.encodePacked(verifyNonMembershipFilePrefix, commandResultSuffix)), ".signer");
@@ -216,12 +216,12 @@ contract LCPClientTest is BasicTest {
             readDecodedBytes(string(abi.encodePacked(verifyNonMembershipFilePrefix, commandResultSuffix)), ".signature");
         proof = abi.encode(
             LCPCommitment.CommitmentProof({
-                commitment: commitmentBytes,
+                message: messageBytes,
                 signer: address(bytes20(signer)),
                 signature: signature
             })
         );
-        (, LCPCommitment.VerifyMembershipMessage memory message) =
+        (, LCPCommitment.VerifyMembershipProxyMessage memory message) =
             LCPCommitmentTestHelper.parseVerifyMembershipCommitmentProof(proof);
         assert(message.value == bytes32(0));
 
