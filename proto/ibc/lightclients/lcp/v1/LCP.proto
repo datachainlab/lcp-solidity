@@ -6,7 +6,7 @@ import "@hyperledger-labs/yui-ibc-solidity/proto/core/02-client/Client.proto";
 option go_package = "github.com/datachainlab/lcp/go/light-clients/lcp/types";
 
 message UpdateClientMessage {
-  bytes elc_message = 1;
+  bytes proxy_message = 1;
   bytes signer = 2;
   bytes signature = 3;
 }
@@ -18,13 +18,14 @@ message RegisterEnclaveKeyMessage {
 }
 
 message ClientState {
-  Height latest_height = 1;
-  bytes mrenclave = 2;
-  uint64 key_expiration = 3;
+  bytes mrenclave = 1;
+  uint64 key_expiration = 2;
+  bool frozen = 3;
+  Height latest_height = 4;
   // e.g. SW_HARDENING_NEEDED, CONFIGURATION_AND_SW_HARDENING_NEEDED (except "OK")
-  repeated string allowed_quote_statuses = 4;
+  repeated string allowed_quote_statuses = 5;
   // e.g. INTEL-SA-XXXXX
-  repeated string allowed_advisory_ids = 5;
+  repeated string allowed_advisory_ids = 6;
 }
 
 message ConsensusState {

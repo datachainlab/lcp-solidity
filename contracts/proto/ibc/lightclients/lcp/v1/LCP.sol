@@ -9,7 +9,7 @@ library IbcLightclientsLcpV1UpdateClientMessage {
 
   //struct definition
   struct Data {
-    bytes elc_message;
+    bytes proxy_message;
     bytes signer;
     bytes signature;
   }
@@ -60,7 +60,7 @@ library IbcLightclientsLcpV1UpdateClientMessage {
       (fieldId, wireType, bytesRead) = ProtoBufRuntime._decode_key(pointer, bs);
       pointer += bytesRead;
       if (fieldId == 1) {
-        pointer += _read_elc_message(pointer, bs, r);
+        pointer += _read_proxy_message(pointer, bs, r);
       } else
       if (fieldId == 2) {
         pointer += _read_signer(pointer, bs, r);
@@ -85,13 +85,13 @@ library IbcLightclientsLcpV1UpdateClientMessage {
    * @param r The in-memory struct
    * @return The number of bytes decoded
    */
-  function _read_elc_message(
+  function _read_proxy_message(
     uint256 p,
     bytes memory bs,
     Data memory r
   ) internal pure returns (uint) {
     (bytes memory x, uint256 sz) = ProtoBufRuntime._decode_bytes(p, bs);
-    r.elc_message = x;
+    r.proxy_message = x;
     return sz;
   }
 
@@ -162,14 +162,14 @@ library IbcLightclientsLcpV1UpdateClientMessage {
     uint256 offset = p;
     uint256 pointer = p;
     
-    if (r.elc_message.length != 0) {
+    if (r.proxy_message.length != 0) {
     pointer += ProtoBufRuntime._encode_key(
       1,
       ProtoBufRuntime.WireType.LengthDelim,
       pointer,
       bs
     );
-    pointer += ProtoBufRuntime._encode_bytes(r.elc_message, pointer, bs);
+    pointer += ProtoBufRuntime._encode_bytes(r.proxy_message, pointer, bs);
     }
     if (r.signer.length != 0) {
     pointer += ProtoBufRuntime._encode_key(
@@ -232,7 +232,7 @@ library IbcLightclientsLcpV1UpdateClientMessage {
     Data memory r
   ) internal pure returns (uint) {
     uint256 e;
-    e += 1 + ProtoBufRuntime._sz_lendelim(r.elc_message.length);
+    e += 1 + ProtoBufRuntime._sz_lendelim(r.proxy_message.length);
     e += 1 + ProtoBufRuntime._sz_lendelim(r.signer.length);
     e += 1 + ProtoBufRuntime._sz_lendelim(r.signature.length);
     return e;
@@ -243,7 +243,7 @@ library IbcLightclientsLcpV1UpdateClientMessage {
     Data memory r
   ) internal pure returns (bool) {
     
-  if (r.elc_message.length != 0) {
+  if (r.proxy_message.length != 0) {
     return false;
   }
 
@@ -266,7 +266,7 @@ library IbcLightclientsLcpV1UpdateClientMessage {
    * @param output The in-storage struct
    */
   function store(Data memory input, Data storage output) internal {
-    output.elc_message = input.elc_message;
+    output.proxy_message = input.proxy_message;
     output.signer = input.signer;
     output.signature = input.signature;
 
@@ -597,9 +597,10 @@ library IbcLightclientsLcpV1ClientState {
 
   //struct definition
   struct Data {
-    Height.Data latest_height;
     bytes mrenclave;
     uint64 key_expiration;
+    bool frozen;
+    Height.Data latest_height;
     string[] allowed_quote_statuses;
     string[] allowed_advisory_ids;
   }
@@ -641,7 +642,7 @@ library IbcLightclientsLcpV1ClientState {
     returns (Data memory, uint)
   {
     Data memory r;
-    uint[6] memory counters;
+    uint[7] memory counters;
     uint256 fieldId;
     ProtoBufRuntime.WireType wireType;
     uint256 bytesRead;
@@ -651,18 +652,21 @@ library IbcLightclientsLcpV1ClientState {
       (fieldId, wireType, bytesRead) = ProtoBufRuntime._decode_key(pointer, bs);
       pointer += bytesRead;
       if (fieldId == 1) {
-        pointer += _read_latest_height(pointer, bs, r);
-      } else
-      if (fieldId == 2) {
         pointer += _read_mrenclave(pointer, bs, r);
       } else
-      if (fieldId == 3) {
+      if (fieldId == 2) {
         pointer += _read_key_expiration(pointer, bs, r);
       } else
+      if (fieldId == 3) {
+        pointer += _read_frozen(pointer, bs, r);
+      } else
       if (fieldId == 4) {
-        pointer += _read_unpacked_repeated_allowed_quote_statuses(pointer, bs, nil(), counters);
+        pointer += _read_latest_height(pointer, bs, r);
       } else
       if (fieldId == 5) {
+        pointer += _read_unpacked_repeated_allowed_quote_statuses(pointer, bs, nil(), counters);
+      } else
+      if (fieldId == 6) {
         pointer += _read_unpacked_repeated_allowed_advisory_ids(pointer, bs, nil(), counters);
       } else
       {
@@ -671,22 +675,22 @@ library IbcLightclientsLcpV1ClientState {
 
     }
     pointer = offset;
-    if (counters[4] > 0) {
-      require(r.allowed_quote_statuses.length == 0);
-      r.allowed_quote_statuses = new string[](counters[4]);
-    }
     if (counters[5] > 0) {
+      require(r.allowed_quote_statuses.length == 0);
+      r.allowed_quote_statuses = new string[](counters[5]);
+    }
+    if (counters[6] > 0) {
       require(r.allowed_advisory_ids.length == 0);
-      r.allowed_advisory_ids = new string[](counters[5]);
+      r.allowed_advisory_ids = new string[](counters[6]);
     }
 
     while (pointer < offset + sz) {
       (fieldId, wireType, bytesRead) = ProtoBufRuntime._decode_key(pointer, bs);
       pointer += bytesRead;
-      if (fieldId == 4) {
+      if (fieldId == 5) {
         pointer += _read_unpacked_repeated_allowed_quote_statuses(pointer, bs, r, counters);
       } else
-      if (fieldId == 5) {
+      if (fieldId == 6) {
         pointer += _read_unpacked_repeated_allowed_advisory_ids(pointer, bs, r, counters);
       } else
       {
@@ -697,23 +701,6 @@ library IbcLightclientsLcpV1ClientState {
   }
 
   // field readers
-
-  /**
-   * @dev The decoder for reading a field
-   * @param p The offset of bytes array to start decode
-   * @param bs The bytes array to be decoded
-   * @param r The in-memory struct
-   * @return The number of bytes decoded
-   */
-  function _read_latest_height(
-    uint256 p,
-    bytes memory bs,
-    Data memory r
-  ) internal pure returns (uint) {
-    (Height.Data memory x, uint256 sz) = _decode_Height(p, bs);
-    r.latest_height = x;
-    return sz;
-  }
 
   /**
    * @dev The decoder for reading a field
@@ -754,6 +741,40 @@ library IbcLightclientsLcpV1ClientState {
    * @param p The offset of bytes array to start decode
    * @param bs The bytes array to be decoded
    * @param r The in-memory struct
+   * @return The number of bytes decoded
+   */
+  function _read_frozen(
+    uint256 p,
+    bytes memory bs,
+    Data memory r
+  ) internal pure returns (uint) {
+    (bool x, uint256 sz) = ProtoBufRuntime._decode_bool(p, bs);
+    r.frozen = x;
+    return sz;
+  }
+
+  /**
+   * @dev The decoder for reading a field
+   * @param p The offset of bytes array to start decode
+   * @param bs The bytes array to be decoded
+   * @param r The in-memory struct
+   * @return The number of bytes decoded
+   */
+  function _read_latest_height(
+    uint256 p,
+    bytes memory bs,
+    Data memory r
+  ) internal pure returns (uint) {
+    (Height.Data memory x, uint256 sz) = _decode_Height(p, bs);
+    r.latest_height = x;
+    return sz;
+  }
+
+  /**
+   * @dev The decoder for reading a field
+   * @param p The offset of bytes array to start decode
+   * @param bs The bytes array to be decoded
+   * @param r The in-memory struct
    * @param counters The counters for repeated fields
    * @return The number of bytes decoded
    */
@@ -761,17 +782,17 @@ library IbcLightclientsLcpV1ClientState {
     uint256 p,
     bytes memory bs,
     Data memory r,
-    uint[6] memory counters
+    uint[7] memory counters
   ) internal pure returns (uint) {
     /**
      * if `r` is NULL, then only counting the number of fields.
      */
     (string memory x, uint256 sz) = ProtoBufRuntime._decode_string(p, bs);
     if (isNil(r)) {
-      counters[4] += 1;
+      counters[5] += 1;
     } else {
-      r.allowed_quote_statuses[r.allowed_quote_statuses.length - counters[4]] = x;
-      counters[4] -= 1;
+      r.allowed_quote_statuses[r.allowed_quote_statuses.length - counters[5]] = x;
+      counters[5] -= 1;
     }
     return sz;
   }
@@ -788,17 +809,17 @@ library IbcLightclientsLcpV1ClientState {
     uint256 p,
     bytes memory bs,
     Data memory r,
-    uint[6] memory counters
+    uint[7] memory counters
   ) internal pure returns (uint) {
     /**
      * if `r` is NULL, then only counting the number of fields.
      */
     (string memory x, uint256 sz) = ProtoBufRuntime._decode_string(p, bs);
     if (isNil(r)) {
-      counters[5] += 1;
+      counters[6] += 1;
     } else {
-      r.allowed_advisory_ids[r.allowed_advisory_ids.length - counters[5]] = x;
-      counters[5] -= 1;
+      r.allowed_advisory_ids[r.allowed_advisory_ids.length - counters[6]] = x;
+      counters[6] -= 1;
     }
     return sz;
   }
@@ -856,18 +877,9 @@ library IbcLightclientsLcpV1ClientState {
     uint256 offset = p;
     uint256 pointer = p;
     uint256 i;
-    
-    pointer += ProtoBufRuntime._encode_key(
-      1,
-      ProtoBufRuntime.WireType.LengthDelim,
-      pointer,
-      bs
-    );
-    pointer += Height._encode_nested(r.latest_height, pointer, bs);
-    
     if (r.mrenclave.length != 0) {
     pointer += ProtoBufRuntime._encode_key(
-      2,
+      1,
       ProtoBufRuntime.WireType.LengthDelim,
       pointer,
       bs
@@ -876,17 +888,35 @@ library IbcLightclientsLcpV1ClientState {
     }
     if (r.key_expiration != 0) {
     pointer += ProtoBufRuntime._encode_key(
-      3,
+      2,
       ProtoBufRuntime.WireType.Varint,
       pointer,
       bs
     );
     pointer += ProtoBufRuntime._encode_uint64(r.key_expiration, pointer, bs);
     }
+    if (r.frozen != false) {
+    pointer += ProtoBufRuntime._encode_key(
+      3,
+      ProtoBufRuntime.WireType.Varint,
+      pointer,
+      bs
+    );
+    pointer += ProtoBufRuntime._encode_bool(r.frozen, pointer, bs);
+    }
+    
+    pointer += ProtoBufRuntime._encode_key(
+      4,
+      ProtoBufRuntime.WireType.LengthDelim,
+      pointer,
+      bs
+    );
+    pointer += Height._encode_nested(r.latest_height, pointer, bs);
+    
     if (r.allowed_quote_statuses.length != 0) {
     for(i = 0; i < r.allowed_quote_statuses.length; i++) {
       pointer += ProtoBufRuntime._encode_key(
-        4,
+        5,
         ProtoBufRuntime.WireType.LengthDelim,
         pointer,
         bs)
@@ -897,7 +927,7 @@ library IbcLightclientsLcpV1ClientState {
     if (r.allowed_advisory_ids.length != 0) {
     for(i = 0; i < r.allowed_advisory_ids.length; i++) {
       pointer += ProtoBufRuntime._encode_key(
-        5,
+        6,
         ProtoBufRuntime.WireType.LengthDelim,
         pointer,
         bs)
@@ -948,9 +978,10 @@ library IbcLightclientsLcpV1ClientState {
     Data memory r
   ) internal pure returns (uint) {
     uint256 e;uint256 i;
-    e += 1 + ProtoBufRuntime._sz_lendelim(Height._estimate(r.latest_height));
     e += 1 + ProtoBufRuntime._sz_lendelim(r.mrenclave.length);
     e += 1 + ProtoBufRuntime._sz_uint64(r.key_expiration);
+    e += 1 + 1;
+    e += 1 + ProtoBufRuntime._sz_lendelim(Height._estimate(r.latest_height));
     for(i = 0; i < r.allowed_quote_statuses.length; i++) {
       e += 1 + ProtoBufRuntime._sz_lendelim(bytes(r.allowed_quote_statuses[i]).length);
     }
@@ -973,6 +1004,10 @@ library IbcLightclientsLcpV1ClientState {
     return false;
   }
 
+  if (r.frozen != false) {
+    return false;
+  }
+
   if (r.allowed_quote_statuses.length != 0) {
     return false;
   }
@@ -992,9 +1027,10 @@ library IbcLightclientsLcpV1ClientState {
    * @param output The in-storage struct
    */
   function store(Data memory input, Data storage output) internal {
-    Height.store(input.latest_height, output.latest_height);
     output.mrenclave = input.mrenclave;
     output.key_expiration = input.key_expiration;
+    output.frozen = input.frozen;
+    Height.store(input.latest_height, output.latest_height);
     output.allowed_quote_statuses = input.allowed_quote_statuses;
     output.allowed_advisory_ids = input.allowed_advisory_ids;
 

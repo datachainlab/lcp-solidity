@@ -79,11 +79,11 @@ contract LCPClient is ILightClient {
             clientState.latest_height.revision_number == 0 && clientState.latest_height.revision_height == 0,
             "invalid initial height"
         );
+        require(!clientState.frozen, "client state must not be frozen");
         require(clientState.key_expiration != 0, "key_expiration must be non-zero");
         require(clientState.mrenclave.length == 32, "invalid mrenclave length");
         require(consensusState.timestamp == 0 && consensusState.state_id.length == 0, "invalid consensus state");
 
-        // NOTE should we set only non-default values?
         clientStates[clientId] = clientState;
 
         // set allowed quote status and advisories
@@ -122,9 +122,8 @@ contract LCPClient is ILightClient {
      * @dev getStatus returns the status of the client corresponding to `clientId`.
      */
 
-    function getStatus(string calldata) external view returns (ClientStatus) {
-        // TODO: should return the correct status after implementing the misbehavior detection
-        return ClientStatus.Active;
+    function getStatus(string calldata clientId) external view returns (ClientStatus) {
+        return clientStates[clientId].frozen ? ClientStatus.Frozen : ClientStatus.Active;
     }
 
     /**
@@ -135,17 +134,13 @@ contract LCPClient is ILightClient {
     function routeUpdateClient(string calldata clientId, bytes calldata protoClientMessage)
         external
         pure
-        returns (bytes4 selector, bytes memory args)
+        returns (bytes4, bytes memory)
     {
-        Any.Data memory anyClientMessage = Any.decode(protoClientMessage);
-        bytes32 typeUrlHash = keccak256(abi.encodePacked(anyClientMessage.type_url));
+        (bytes32 typeUrlHash, bytes memory args) = LCPProtoMarshaler.routeClientMessage(clientId, protoClientMessage);
         if (typeUrlHash == LCPProtoMarshaler.UPDATE_CLIENT_MESSAGE_TYPE_URL_HASH) {
-            return (this.updateState.selector, abi.encode(clientId, UpdateClientMessage.decode(anyClientMessage.value)));
+            return (this.updateClient.selector, args);
         } else if (typeUrlHash == LCPProtoMarshaler.REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL_HASH) {
-            return (
-                this.registerEnclaveKey.selector,
-                abi.encode(clientId, RegisterEnclaveKeyMessage.decode(anyClientMessage.value))
-            );
+            return (this.registerEnclaveKey.selector, args);
         } else {
             revert("unknown type url");
         }
@@ -165,8 +160,10 @@ contract LCPClient is ILightClient {
         bytes memory path,
         bytes calldata value
     ) public view returns (bool) {
-        (LCPCommitment.CommitmentProof memory commitmentProof, LCPCommitment.VerifyMembershipMessage memory message) =
-            LCPCommitment.parseVerifyMembershipCommitmentProof(proof);
+        (
+            LCPCommitment.CommitmentProof memory commitmentProof,
+            LCPCommitment.VerifyMembershipProxyMessage memory message
+        ) = LCPCommitment.parseVerifyMembershipCommitmentProof(proof);
         require(commitmentProof.signature.length == 65, "invalid signature length");
 
         ConsensusState storage consensusState = consensusStates[clientId][message.height.toUint128()];
@@ -179,9 +176,7 @@ contract LCPClient is ILightClient {
         require(consensusState.stateId == message.stateId, "invalid state_id");
         require(isActiveKey(clientId, commitmentProof.signer), "the key isn't active");
         require(
-            verifyCommitmentProof(
-                keccak256(commitmentProof.commitment), commitmentProof.signature, commitmentProof.signer
-            ),
+            verifyCommitmentProof(keccak256(commitmentProof.message), commitmentProof.signature, commitmentProof.signer),
             "failed to verify signature"
         );
 
@@ -201,8 +196,10 @@ contract LCPClient is ILightClient {
         bytes calldata prefix,
         bytes calldata path
     ) public view returns (bool) {
-        (LCPCommitment.CommitmentProof memory commitmentProof, LCPCommitment.VerifyMembershipMessage memory message) =
-            LCPCommitment.parseVerifyMembershipCommitmentProof(proof);
+        (
+            LCPCommitment.CommitmentProof memory commitmentProof,
+            LCPCommitment.VerifyMembershipProxyMessage memory message
+        ) = LCPCommitment.parseVerifyMembershipCommitmentProof(proof);
         require(commitmentProof.signature.length == 65, "invalid signature length");
 
         ConsensusState storage consensusState = consensusStates[clientId][message.height.toUint128()];
@@ -215,9 +212,7 @@ contract LCPClient is ILightClient {
         require(consensusState.stateId == message.stateId, "invalid state_id");
         require(isActiveKey(clientId, commitmentProof.signer), "the key isn't active");
         require(
-            verifyCommitmentProof(
-                keccak256(commitmentProof.commitment), commitmentProof.signature, commitmentProof.signer
-            ),
+            verifyCommitmentProof(keccak256(commitmentProof.message), commitmentProof.signature, commitmentProof.signer),
             "failed to verify signature"
         );
 
@@ -260,44 +255,81 @@ contract LCPClient is ILightClient {
         );
     }
 
-    function updateState(string calldata clientId, UpdateClientMessage.Data calldata message)
+    function updateClient(string calldata clientId, UpdateClientMessage.Data calldata message)
         public
         returns (Height.Data[] memory heights)
     {
         require(message.signer.length == 20, "invalid signer length");
         require(message.signature.length == 65, "invalid signature length");
 
-        ProtoClientState.Data storage clientState = clientStates[clientId];
-        ConsensusState storage consensusState;
-
-        LCPCommitment.UpdateClientMessage memory emsg = LCPCommitment.parseUpdateClientMessage(message.elc_message);
-        if (clientState.latest_height.revision_number == 0 && clientState.latest_height.revision_height == 0) {
-            require(emsg.emittedStates.length != 0, "EmittedStates must be non-nil");
-        } else {
-            consensusState = consensusStates[clientId][emsg.prevHeight.toUint128()];
-            require(emsg.prevStateId != bytes32(0), "PrevStateID must be non-nil");
-            require(consensusState.stateId == emsg.prevStateId, "unexpected StateID");
-        }
-
-        LCPCommitment.validationContextEval(emsg.context, block.timestamp * 1e9);
-
         require(isActiveKey(clientId, address(bytes20(message.signer))), "the key isn't active");
-
         require(
-            verifyCommitmentProof(keccak256(message.elc_message), message.signature, address(bytes20(message.signer))),
+            verifyCommitmentProof(keccak256(message.proxy_message), message.signature, address(bytes20(message.signer))),
             "failed to verify the commitment"
         );
 
-        if (clientState.latest_height.lt(emsg.postHeight)) {
-            clientState.latest_height = emsg.postHeight;
+        LCPCommitment.HeaderedProxyMessage memory hm =
+            abi.decode(message.proxy_message, (LCPCommitment.HeaderedProxyMessage));
+        if (hm.header == LCPCommitment.LCP_MESSAGE_HEADER_UPDATE_STATE) {
+            return updateState(clientId, abi.decode(hm.message, (LCPCommitment.UpdateStateProxyMessage)));
+        } else if (hm.header == LCPCommitment.LCP_MESSAGE_HEADER_MISBEHAVIOUR) {
+            return submitMisbehaviour(clientId, abi.decode(hm.message, (LCPCommitment.MisbehaviourProxyMessage)));
+        } else {
+            revert("unexpected header");
+        }
+    }
+
+    function updateState(string calldata clientId, LCPCommitment.UpdateStateProxyMessage memory pmsg)
+        internal
+        returns (Height.Data[] memory heights)
+    {
+        ProtoClientState.Data storage clientState = clientStates[clientId];
+        ConsensusState storage consensusState;
+
+        require(!clientState.frozen, "client state must not be frozen");
+
+        if (clientState.latest_height.revision_number == 0 && clientState.latest_height.revision_height == 0) {
+            require(pmsg.emittedStates.length != 0, "EmittedStates must be non-nil");
+        } else {
+            consensusState = consensusStates[clientId][pmsg.prevHeight.toUint128()];
+            require(pmsg.prevStateId != bytes32(0), "PrevStateID must be non-nil");
+            require(consensusState.stateId == pmsg.prevStateId, "unexpected StateID");
         }
 
-        consensusState = consensusStates[clientId][emsg.postHeight.toUint128()];
-        consensusState.stateId = emsg.postStateId;
-        consensusState.timestamp = uint64(emsg.timestamp);
+        LCPCommitment.validationContextEval(pmsg.context, block.timestamp * 1e9);
+
+        if (clientState.latest_height.lt(pmsg.postHeight)) {
+            clientState.latest_height = pmsg.postHeight;
+        }
+
+        consensusState = consensusStates[clientId][pmsg.postHeight.toUint128()];
+        consensusState.stateId = pmsg.postStateId;
+        consensusState.timestamp = uint64(pmsg.timestamp);
 
         heights = new Height.Data[](1);
-        heights[0] = emsg.postHeight;
+        heights[0] = pmsg.postHeight;
+        return heights;
+    }
+
+    function submitMisbehaviour(string calldata clientId, LCPCommitment.MisbehaviourProxyMessage memory pmsg)
+        internal
+        returns (Height.Data[] memory heights)
+    {
+        ProtoClientState.Data storage clientState = clientStates[clientId];
+        ConsensusState storage consensusState;
+
+        require(!clientState.frozen, "client state must not be frozen");
+        require(pmsg.prevStates.length != 0, "PrevStates must be non-nil");
+
+        for (uint256 i = 0; i < pmsg.prevStates.length; i++) {
+            consensusState = consensusStates[clientId][pmsg.prevStates[i].height.toUint128()];
+            require(pmsg.prevStates[i].stateId != bytes32(0), "stateId must be non-nil");
+            require(consensusState.stateId == pmsg.prevStates[i].stateId, "unexpected StateID");
+        }
+
+        LCPCommitment.validationContextEval(pmsg.context, block.timestamp * 1e9);
+
+        clientState.frozen = true;
         return heights;
     }
 

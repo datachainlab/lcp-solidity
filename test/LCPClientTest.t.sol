@@ -97,7 +97,7 @@ contract LCPClientTest is BasicTest {
         for (uint256 i = 0; i < dataList.length; i++) {
             if (dataList[i].cmd == Command.UpdateClient) {
                 UpdateClientMessage.Data memory message = createUpdateClientMessage(dataList[i].path);
-                Height.Data[] memory heights = lc.updateState(clientId, message);
+                Height.Data[] memory heights = lc.updateClient(clientId, message);
                 require(heights.length == 1, "heights length must be 1");
                 console.log("revision_height:");
                 console.log(heights[0].revision_height);
@@ -137,6 +137,7 @@ contract LCPClientTest is BasicTest {
         // Note `latest_height` must be zero height
         clientState.mrenclave = mrenclave;
         clientState.key_expiration = 60 * 60 * 24 * 7;
+        clientState.frozen = false;
 
         // WARNING: the following configuration is for testing purpose only
         clientState.allowed_quote_statuses = new string[](1);
@@ -157,7 +158,7 @@ contract LCPClientTest is BasicTest {
         internal
         returns (UpdateClientMessage.Data memory message)
     {
-        message.elc_message =
+        message.proxy_message =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".message");
         message.signer =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".signer");
@@ -177,7 +178,7 @@ contract LCPClientTest is BasicTest {
     {
         value = readDecodedBytes(string(abi.encodePacked(verifyMembershipFilePrefix, commandInputSuffix)), ".value");
         {
-            bytes memory commitmentBytes =
+            bytes memory messageBytes =
                 readDecodedBytes(string(abi.encodePacked(verifyMembershipFilePrefix, commandResultSuffix)), ".message");
             bytes memory signer =
                 readDecodedBytes(string(abi.encodePacked(verifyMembershipFilePrefix, commandResultSuffix)), ".signer");
@@ -187,13 +188,13 @@ contract LCPClientTest is BasicTest {
             );
             proof = abi.encode(
                 LCPCommitment.CommitmentProof({
-                    commitment: commitmentBytes,
+                    message: messageBytes,
                     signer: address(bytes20(signer)),
                     signature: signature
                 })
             );
         }
-        (, LCPCommitment.VerifyMembershipMessage memory message) =
+        (, LCPCommitment.VerifyMembershipProxyMessage memory message) =
             LCPCommitmentTestHelper.parseVerifyMembershipCommitmentProof(proof);
         assert(message.value == keccak256(value));
 
@@ -206,7 +207,7 @@ contract LCPClientTest is BasicTest {
         internal
         returns (Height.Data memory height, bytes memory proof, bytes memory prefix, bytes memory path)
     {
-        bytes memory commitmentBytes =
+        bytes memory messageBytes =
             readDecodedBytes(string(abi.encodePacked(verifyNonMembershipFilePrefix, commandResultSuffix)), ".message");
         bytes memory signer =
             readDecodedBytes(string(abi.encodePacked(verifyNonMembershipFilePrefix, commandResultSuffix)), ".signer");
@@ -215,12 +216,12 @@ contract LCPClientTest is BasicTest {
             readDecodedBytes(string(abi.encodePacked(verifyNonMembershipFilePrefix, commandResultSuffix)), ".signature");
         proof = abi.encode(
             LCPCommitment.CommitmentProof({
-                commitment: commitmentBytes,
+                message: messageBytes,
                 signer: address(bytes20(signer)),
                 signature: signature
             })
         );
-        (, LCPCommitment.VerifyMembershipMessage memory message) =
+        (, LCPCommitment.VerifyMembershipProxyMessage memory message) =
             LCPCommitmentTestHelper.parseVerifyMembershipCommitmentProof(proof);
         assert(message.value == bytes32(0));
 
