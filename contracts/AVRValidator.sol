@@ -354,8 +354,7 @@ library AVRValidator {
                 return offset + 1;
             }
         }
-
-        require(false, "missing listEnd");
+        revert("missing listEnd");
     }
 
     function consumeJSONKey(bytes calldata report, uint256 i, string memory keyStr) internal pure returns (uint256) {

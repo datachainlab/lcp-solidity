@@ -55,7 +55,7 @@ library LCPProtoMarshaler {
         returns (bytes32 typeUrlHash, bytes memory args)
     {
         Any.Data memory anyClientMessage = Any.decode(protoClientMessage);
-        bytes32 typeUrlHash = keccak256(abi.encodePacked(anyClientMessage.type_url));
+        typeUrlHash = keccak256(abi.encodePacked(anyClientMessage.type_url));
         if (typeUrlHash == UPDATE_CLIENT_MESSAGE_TYPE_URL_HASH) {
             UpdateClientMessage.Data memory message = UpdateClientMessage.decode(anyClientMessage.value);
             return (typeUrlHash, abi.encode(clientId, message));

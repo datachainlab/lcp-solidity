@@ -100,7 +100,7 @@ contract ReportTest is BasicTest {
         }
     }
 
-    function testTimestampParsing() public {
+    function testTimestampParsing() public view {
         // TODO add tests for DateUtils
         for (uint256 i = 0; i < cases.length; i++) {
             TestCase storage c = cases[i];
