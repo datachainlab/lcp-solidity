@@ -134,18 +134,13 @@ contract LCPClient is ILightClient {
     function routeUpdateClient(string calldata clientId, bytes calldata protoClientMessage)
         external
         pure
-        returns (bytes4 selector, bytes memory args)
+        returns (bytes4, bytes memory)
     {
-        Any.Data memory anyClientMessage = Any.decode(protoClientMessage);
-        bytes32 typeUrlHash = keccak256(abi.encodePacked(anyClientMessage.type_url));
+        (bytes32 typeUrlHash, bytes memory args) = LCPProtoMarshaler.routeClientMessage(clientId, protoClientMessage);
         if (typeUrlHash == LCPProtoMarshaler.UPDATE_CLIENT_MESSAGE_TYPE_URL_HASH) {
-            return
-                (this.updateClient.selector, abi.encode(clientId, UpdateClientMessage.decode(anyClientMessage.value)));
+            return (this.updateClient.selector, args);
         } else if (typeUrlHash == LCPProtoMarshaler.REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL_HASH) {
-            return (
-                this.registerEnclaveKey.selector,
-                abi.encode(clientId, RegisterEnclaveKeyMessage.decode(anyClientMessage.value))
-            );
+            return (this.registerEnclaveKey.selector, args);
         } else {
             revert("unknown type url");
         }

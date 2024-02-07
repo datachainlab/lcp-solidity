@@ -49,6 +49,24 @@ library LCPProtoMarshaler {
         return Any.encode(anyConsensusState);
     }
 
+    function routeClientMessage(string calldata clientId, bytes calldata protoClientMessage)
+        external
+        pure
+        returns (bytes32 typeUrlHash, bytes memory args)
+    {
+        Any.Data memory anyClientMessage = Any.decode(protoClientMessage);
+        bytes32 typeUrlHash = keccak256(abi.encodePacked(anyClientMessage.type_url));
+        if (typeUrlHash == UPDATE_CLIENT_MESSAGE_TYPE_URL_HASH) {
+            UpdateClientMessage.Data memory message = UpdateClientMessage.decode(anyClientMessage.value);
+            return (typeUrlHash, abi.encode(clientId, message));
+        } else if (typeUrlHash == REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL_HASH) {
+            RegisterEnclaveKeyMessage.Data memory message = RegisterEnclaveKeyMessage.decode(anyClientMessage.value);
+            return (typeUrlHash, abi.encode(clientId, message));
+        } else {
+            revert("unsupported client message type");
+        }
+    }
+
     function unmarshalClientState(bytes calldata bz) external pure returns (ClientState.Data memory clientState) {
         Any.Data memory anyClientState = Any.decode(bz);
         require(
