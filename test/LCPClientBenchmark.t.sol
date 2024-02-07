@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.12;
 
+import "@openzeppelin/contracts/utils/Strings.sol";
 import "./TestHelper.t.sol";
 import "../contracts/LCPClient.sol";
+import {
+    IbcLightclientsLcpV1ClientState as ClientState,
+    IbcLightclientsLcpV1ConsensusState as ConsensusState
+} from "../contracts/proto/ibc/lightclients/lcp/v1/LCP.sol";
 
 abstract contract BaseLCPClientBenchmark is BasicTest {
     string internal constant commandAvrFile = "test/data/client/02/001-avr";

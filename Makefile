@@ -22,3 +22,8 @@ fmt:
 .PHONY: check-fmt
 check-fmt:
 	@$(MAKE) FORGE_FMT_OPTS=--check fmt
+
+.PHONY: lint
+lint:
+	@npx solhint 'contracts/*.sol'
+	@$(MAKE) FORGE_FMT_OPTS=--check fmt

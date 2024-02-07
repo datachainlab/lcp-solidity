@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.12;
 
-import "@hyperledger-labs/yui-ibc-solidity/contracts/proto/Client.sol";
+import {Height} from "@hyperledger-labs/yui-ibc-solidity/contracts/proto/Client.sol";
 
 library LCPCommitment {
     uint16 constant LCP_MESSAGE_VERSION = 1;

@@ -31,5 +31,5 @@ jobs:
     - name: Run tests
       run: make SOLC_VERSION=${{ env.SOLC_VERSION }} test
 
-    - name: Check code formatting
-      run: make check-fmt
+    - name: Lint
+      run: make lint

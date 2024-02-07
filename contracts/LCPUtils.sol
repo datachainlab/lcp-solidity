@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.12;
 
-import "@ensdomains/ens-contracts/contracts/dnssec-oracle/BytesUtils.sol";
-import "solidity-datetime/contracts/DateTime.sol";
+import {BytesUtils} from "@ensdomains/ens-contracts/contracts/dnssec-oracle/BytesUtils.sol";
+import {DateTime} from "solidity-datetime/contracts/DateTime.sol";
 
 library LCPUtils {
     /**
