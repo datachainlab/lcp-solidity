@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.12;
 
-import "@ensdomains/ens-contracts/contracts/dnssec-oracle/algorithms/RSAVerify.sol";
-import "@ensdomains/ens-contracts/contracts/dnssec-oracle/BytesUtils.sol";
-import "solidity-datetime/contracts/DateTime.sol";
-import "base64/base64.sol";
-import "./Asn1Decode.sol";
-import "./LCPUtils.sol";
+import {RSAVerify} from "@ensdomains/ens-contracts/contracts/dnssec-oracle/algorithms/RSAVerify.sol";
+import {BytesUtils} from "@ensdomains/ens-contracts/contracts/dnssec-oracle/BytesUtils.sol";
+import {Base64} from "base64/base64.sol";
+import {Asn1Decode, NodePtr} from "./Asn1Decode.sol";
+import {LCPUtils} from "./LCPUtils.sol";
 
 /**
  * @dev AVRValidator provides the validation functions of Intel's Attestation Verification Report(AVR)
@@ -438,8 +437,10 @@ library AVRValidator {
         uint256 val = 0;
         uint8 zero = uint8(48); //0
         uint8 nine = uint8(57); //9
+        // solhint-disable-next-line var-name-mixedcase
         uint8 A = uint8(65); //A
         uint8 a = uint8(97); // a
+        // solhint-disable-next-line var-name-mixedcase
         uint8 F = uint8(70); //F
         uint8 f = uint8(102); //f
         for (uint256 i = 0; i < 4; ++i) {

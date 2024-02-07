@@ -1,21 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.12;
 
-import "@hyperledger-labs/yui-ibc-solidity/contracts/core/02-client/ILightClient.sol";
-import "@hyperledger-labs/yui-ibc-solidity/contracts/core/02-client/IBCHeight.sol";
-import "@hyperledger-labs/yui-ibc-solidity/contracts/proto/Client.sol";
-import {GoogleProtobufAny as Any} from "@hyperledger-labs/yui-ibc-solidity/contracts/proto/GoogleProtobufAny.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {ILightClient} from "@hyperledger-labs/yui-ibc-solidity/contracts/core/02-client/ILightClient.sol";
+import {IBCHeight} from "@hyperledger-labs/yui-ibc-solidity/contracts/core/02-client/IBCHeight.sol";
+import {Height} from "@hyperledger-labs/yui-ibc-solidity/contracts/proto/Client.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {
     IbcLightclientsLcpV1ClientState as ProtoClientState,
     IbcLightclientsLcpV1ConsensusState as ProtoConsensusState,
     IbcLightclientsLcpV1RegisterEnclaveKeyMessage as RegisterEnclaveKeyMessage,
     IbcLightclientsLcpV1UpdateClientMessage as UpdateClientMessage
 } from "./proto/ibc/lightclients/lcp/v1/LCP.sol";
-import "./LCPCommitment.sol";
-import "./LCPProtoMarshaler.sol";
-import "./LCPUtils.sol";
-import "./AVRValidator.sol";
+import {LCPCommitment} from "./LCPCommitment.sol";
+import {LCPProtoMarshaler} from "./LCPProtoMarshaler.sol";
+import {LCPUtils} from "./LCPUtils.sol";
+import {AVRValidator} from "./AVRValidator.sol";
 
 contract LCPClient is ILightClient {
     using IBCHeight for Height.Data;
