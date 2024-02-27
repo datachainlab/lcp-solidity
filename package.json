@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "description": "LCP Client in Solidity",
   "dependencies": {
-    "@openzeppelin/contracts": "^4.8.0",
-    "@hyperledger-labs/yui-ibc-solidity": "git+https://github.com/hyperledger-labs/yui-ibc-solidity.git#v0.3.23",
+    "@openzeppelin/contracts": "^5.0.1",
+    "@hyperledger-labs/yui-ibc-solidity": "git+https://github.com/hyperledger-labs/yui-ibc-solidity.git#v0.3.25",
     "base64": "git+https://github.com/datachainlab/base64.git#4d85607b18d981acff392d2e99ba654305552a97",
     "solidity-datetime": "git+https://github.com/datachainlab/solidity-datetime.git#294fc244973cc5f9ec374713affde12c1403927c",
     "@ensdomains/ens-contracts": "0.0.22"
