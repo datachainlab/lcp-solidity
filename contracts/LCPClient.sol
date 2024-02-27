@@ -56,7 +56,7 @@ contract LCPClient is ILightClient {
     }
 
     // @dev isDevelopmentMode returns true if the client allows the remote attestation of IAS in development.
-    function isDevelopmentMode() external view returns (bool) {
+    function isDevelopmentMode() public view returns (bool) {
         return developmentMode;
     }
 
@@ -69,7 +69,7 @@ contract LCPClient is ILightClient {
         string calldata clientId,
         bytes calldata protoClientState,
         bytes calldata protoConsensusState
-    ) external onlyIBC returns (Height.Data memory height) {
+    ) public onlyIBC returns (Height.Data memory height) {
         ProtoClientState.Data memory clientState = LCPProtoMarshaler.unmarshalClientState(protoClientState);
         ProtoConsensusState.Data memory consensusState = LCPProtoMarshaler.unmarshalConsensusState(protoConsensusState);
 
@@ -99,11 +99,7 @@ contract LCPClient is ILightClient {
     /**
      * @dev getTimestampAtHeight returns the timestamp of the consensus state at the given height.
      */
-    function getTimestampAtHeight(string calldata clientId, Height.Data calldata height)
-        external
-        view
-        returns (uint64)
-    {
+    function getTimestampAtHeight(string calldata clientId, Height.Data calldata height) public view returns (uint64) {
         ConsensusState storage consensusState = consensusStates[clientId][height.toUint128()];
         require(consensusState.timestamp != 0, "consensus state not found");
         return consensusState.timestamp;
@@ -112,7 +108,7 @@ contract LCPClient is ILightClient {
     /**
      * @dev getLatestHeight returns the latest height of the client state corresponding to `clientId`.
      */
-    function getLatestHeight(string calldata clientId) external view returns (Height.Data memory) {
+    function getLatestHeight(string calldata clientId) public view returns (Height.Data memory) {
         ProtoClientState.Data storage clientState = clientStates[clientId];
         require(clientState.latest_height.revision_height != 0, "client state not found");
         return clientState.latest_height;
@@ -121,8 +117,21 @@ contract LCPClient is ILightClient {
      * @dev getStatus returns the status of the client corresponding to `clientId`.
      */
 
-    function getStatus(string calldata clientId) external view returns (ClientStatus) {
+    function getStatus(string calldata clientId) public view returns (ClientStatus) {
         return clientStates[clientId].frozen ? ClientStatus.Frozen : ClientStatus.Active;
+    }
+
+    /**
+     * @dev getLatestInfo returns the latest height, the latest timestamp, and the status of the client corresponding to `clientId`.
+     */
+    function getLatestInfo(string calldata clientId)
+        public
+        view
+        returns (Height.Data memory latestHeight, uint64 latestTimestamp, ClientStatus status)
+    {
+        latestHeight = clientStates[clientId].latest_height;
+        latestTimestamp = consensusStates[clientId][latestHeight.toUint128()].timestamp;
+        status = clientStates[clientId].frozen ? ClientStatus.Frozen : ClientStatus.Active;
     }
 
     /**
@@ -131,7 +140,7 @@ contract LCPClient is ILightClient {
      *      Check ADR-001 for details.
      */
     function routeUpdateClient(string calldata clientId, bytes calldata protoClientMessage)
-        external
+        public
         pure
         returns (bytes4, bytes memory)
     {
@@ -222,7 +231,7 @@ contract LCPClient is ILightClient {
      * @dev getClientState returns the clientState corresponding to `clientId`.
      *      If it's not found, the function returns false.
      */
-    function getClientState(string calldata clientId) external view returns (bytes memory clientStateBytes, bool) {
+    function getClientState(string calldata clientId) public view returns (bytes memory clientStateBytes, bool) {
         ProtoClientState.Data storage clientState = clientStates[clientId];
         if (clientState.latest_height.revision_height == 0) {
             return (clientStateBytes, false);
@@ -235,7 +244,7 @@ contract LCPClient is ILightClient {
      *      If it's not found, the function returns false.
      */
     function getConsensusState(string calldata clientId, Height.Data calldata height)
-        external
+        public
         view
         returns (bytes memory consensusStateBytes, bool)
     {
