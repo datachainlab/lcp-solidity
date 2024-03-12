@@ -6,8 +6,12 @@ import "./TestHelper.t.sol";
 import "../contracts/LCPClient.sol";
 import {
     IbcLightclientsLcpV1ClientState as ClientState,
-    IbcLightclientsLcpV1ConsensusState as ConsensusState
+    IbcLightclientsLcpV1ConsensusState as ConsensusState,
+    IbcLightclientsLcpV1RegisterEnclaveKeyMessage as RegisterEnclaveKeyMessage,
+    IbcLightclientsLcpV1UpdateClientMessage as UpdateClientMessage
 } from "../contracts/proto/ibc/lightclients/lcp/v1/LCP.sol";
+import {LCPProtoMarshaler} from "../contracts/LCPProtoMarshaler.sol";
+import {IBCHeight} from "@hyperledger-labs/yui-ibc-solidity/contracts/core/02-client/IBCHeight.sol";
 
 abstract contract BaseLCPClientBenchmark is BasicTest {
     string internal constant commandAvrFile = "test/data/client/02/001-avr";
@@ -18,7 +22,7 @@ abstract contract BaseLCPClientBenchmark is BasicTest {
     string clientId;
 
     function createLCContract() internal returns (BLCPClient) {
-        return new BLCPClient(address(this), vm.readFileBinary(rootCAFile), true);
+        return new BLCPClient(address(this), true, vm.readFileBinary(rootCAFile));
     }
 
     function createClient() internal {
@@ -69,8 +73,8 @@ abstract contract BaseLCPClientBenchmark is BasicTest {
 }
 
 contract BLCPClient is LCPClient {
-    constructor(address ibcHandler_, bytes memory rootCACert, bool developmentMode_)
-        LCPClient(ibcHandler_, rootCACert, developmentMode_)
+    constructor(address ibcHandler_, bool developmentMode_, bytes memory rootCACert)
+        LCPClient(ibcHandler_, developmentMode_, rootCACert)
     {}
 
     function setSigningRSAParams(bytes32 signingCertHash, AVRValidator.RSAParams calldata params) public {

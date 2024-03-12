@@ -3,7 +3,9 @@ pragma solidity ^0.8.12;
 
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@ensdomains/ens-contracts/contracts/dnssec-oracle/BytesUtils.sol";
+import {IBCHeight} from "@hyperledger-labs/yui-ibc-solidity/contracts/core/02-client/IBCHeight.sol";
 import "../contracts/LCPClient.sol";
+import "../contracts/LCPClientBase.sol";
 import {
     IbcLightclientsLcpV1ClientState as ClientState,
     IbcLightclientsLcpV1ConsensusState as ConsensusState,
@@ -12,6 +14,7 @@ import {
 } from "../contracts/proto/ibc/lightclients/lcp/v1/LCP.sol";
 import "../contracts/LCPCommitment.sol";
 import "../contracts/LCPUtils.sol";
+import {LCPProtoMarshaler} from "../contracts/LCPProtoMarshaler.sol";
 import "./TestHelper.t.sol";
 
 contract LCPClientTest is BasicTest {
@@ -42,9 +45,9 @@ contract LCPClientTest is BasicTest {
     function setUp() public {
         vm.warp(1692703263);
         iasLC =
-            new LCPClient(address(this), vm.readFileBinary("./test/data/certs/Intel_SGX_Attestation_RootCA.der"), true);
+            new LCPClient(address(this), true, vm.readFileBinary("./test/data/certs/Intel_SGX_Attestation_RootCA.der"));
         require(iasLC.isDevelopmentMode() == true, "developmentMode must be true");
-        simulationLC = new LCPClient(address(this), vm.readFileBinary("./test/data/certs/simulation_rootca.der"), true);
+        simulationLC = new LCPClient(address(this), true, vm.readFileBinary("./test/data/certs/simulation_rootca.der"));
     }
 
     function generateClientId(uint64 clientCounter) internal pure returns (string memory) {
@@ -88,8 +91,9 @@ contract LCPClientTest is BasicTest {
         {
             RegisterEnclaveKeyMessage.Data memory message = createRegisterEnclaveKeyMessage(commandAvrFile);
             // the following staticcall is expected to succeed because registerEnclaveKey does not update the state if the message contains an enclave key already registered
-            (bool success,) =
-                address(lc).staticcall(abi.encodeWithSelector(LCPClient.registerEnclaveKey.selector, clientId, message));
+            (bool success,) = address(lc).staticcall(
+                abi.encodeWithSelector(LCPClientBase.registerEnclaveKey.selector, clientId, message)
+            );
             require(success, "failed to register duplicated enclave key");
         }
 
