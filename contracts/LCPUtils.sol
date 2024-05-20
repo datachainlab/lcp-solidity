@@ -5,6 +5,10 @@ import {BytesUtils} from "@ensdomains/ens-contracts/contracts/dnssec-oracle/Byte
 import {DateTime} from "solidity-datetime/contracts/DateTime.sol";
 
 library LCPUtils {
+    error LCPUtilsReadBytesUntilNotFound();
+    error LCPUtilsRFC5280TimeToSecondsInvalidFormat(bytes timestamp);
+    error LCPUtilsTimestampFromDateTimeInvalidDateTime();
+
     /**
      * @dev readBytesUntil reads bytes until the needle is found.
      */
@@ -14,7 +18,9 @@ library LCPUtils {
         returns (bytes memory bz, uint256 pos)
     {
         pos = BytesUtils.find(src, offset, src.length, needle);
-        require(pos != type(uint256).max, "not found");
+        if (pos == type(uint256).max) {
+            revert LCPUtilsReadBytesUntilNotFound();
+        }
         return (BytesUtils.substring(src, offset, pos - offset), pos);
     }
 
@@ -64,7 +70,7 @@ library LCPUtils {
             year += uint256(uint8(timestamp[0]) - 48) * 1000 + uint256(uint8(timestamp[1]) - 48) * 100;
             offset = 2;
         } else {
-            revert("unknown time format");
+            revert LCPUtilsRFC5280TimeToSecondsInvalidFormat(timestamp);
         }
         year += uint256(uint8(timestamp[offset]) - 48) * 10 + uint8(timestamp[offset + 1]) - 48;
         // ensure the last char is 'Z'
@@ -87,7 +93,9 @@ library LCPUtils {
         uint256 minute,
         uint256 second
     ) private pure returns (uint256) {
-        require(DateTime.isValidDateTime(year, month, day, hour, minute, second), "invalid date time");
+        if (!DateTime.isValidDateTime(year, month, day, hour, minute, second)) {
+            revert LCPUtilsTimestampFromDateTimeInvalidDateTime();
+        }
         return DateTime.timestampFromDateTime(year, month, day, hour, minute, second);
     }
 }

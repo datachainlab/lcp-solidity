@@ -24,28 +24,35 @@ library LCPProtoMarshaler {
     bytes32 constant CLIENT_STATE_TYPE_URL_HASH = keccak256(abi.encodePacked(CLIENT_STATE_TYPE_URL));
     bytes32 constant CONSENSUS_STATE_TYPE_URL_HASH = keccak256(abi.encodePacked(CONSENSUS_STATE_TYPE_URL));
 
-    function marshal(UpdateClientMessage.Data calldata message) external pure returns (bytes memory) {
+    function marshal(UpdateClientMessage.Data calldata message) public pure returns (bytes memory) {
         Any.Data memory any;
         any.type_url = UPDATE_CLIENT_MESSAGE_TYPE_URL;
         any.value = UpdateClientMessage.encode(message);
         return Any.encode(any);
     }
 
-    function marshal(RegisterEnclaveKeyMessage.Data calldata message) external pure returns (bytes memory) {
+    function marshalConsensusState(bytes32 stateId, uint64 timestamp) public pure returns (bytes memory) {
+        Any.Data memory anyConsensusState;
+        anyConsensusState.type_url = CONSENSUS_STATE_TYPE_URL;
+        anyConsensusState.value = abi.encodePacked(stateId, timestamp);
+        return Any.encode(anyConsensusState);
+    }
+
+    function marshal(RegisterEnclaveKeyMessage.Data calldata message) public pure returns (bytes memory) {
         Any.Data memory any;
         any.type_url = REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL;
         any.value = RegisterEnclaveKeyMessage.encode(message);
         return Any.encode(any);
     }
 
-    function marshal(ClientState.Data calldata clientState) external pure returns (bytes memory) {
+    function marshal(ClientState.Data calldata clientState) public pure returns (bytes memory) {
         Any.Data memory anyClientState;
         anyClientState.type_url = CLIENT_STATE_TYPE_URL;
         anyClientState.value = ClientState.encode(clientState);
         return Any.encode(anyClientState);
     }
 
-    function marshal(ConsensusState.Data calldata consensusState) external pure returns (bytes memory) {
+    function marshal(ConsensusState.Data calldata consensusState) public pure returns (bytes memory) {
         Any.Data memory anyConsensusState;
         anyConsensusState.type_url = CONSENSUS_STATE_TYPE_URL;
         anyConsensusState.value = ConsensusState.encode(consensusState);
