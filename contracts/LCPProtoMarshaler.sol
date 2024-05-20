@@ -12,12 +12,15 @@ import {GoogleProtobufAny as Any} from "@hyperledger-labs/yui-ibc-solidity/contr
 library LCPProtoMarshaler {
     string constant UPDATE_CLIENT_MESSAGE_TYPE_URL = "/ibc.lightclients.lcp.v1.UpdateClientMessage";
     string constant REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL = "/ibc.lightclients.lcp.v1.RegisterEnclaveKeyMessage";
+    string constant UPDATE_OPERATORS_MESSAGE_TYPE_URL = "/ibc.lightclients.lcp.v1.UpdateOperatorsMessage";
     string constant CLIENT_STATE_TYPE_URL = "/ibc.lightclients.lcp.v1.ClientState";
     string constant CONSENSUS_STATE_TYPE_URL = "/ibc.lightclients.lcp.v1.ConsensusState";
 
     bytes32 constant UPDATE_CLIENT_MESSAGE_TYPE_URL_HASH = keccak256(abi.encodePacked(UPDATE_CLIENT_MESSAGE_TYPE_URL));
     bytes32 constant REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL_HASH =
         keccak256(abi.encodePacked(REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL));
+    bytes32 constant UPDATE_OPERATORS_MESSAGE_TYPE_URL_HASH =
+        keccak256(abi.encodePacked(UPDATE_OPERATORS_MESSAGE_TYPE_URL));
     bytes32 constant CLIENT_STATE_TYPE_URL_HASH = keccak256(abi.encodePacked(CLIENT_STATE_TYPE_URL));
     bytes32 constant CONSENSUS_STATE_TYPE_URL_HASH = keccak256(abi.encodePacked(CONSENSUS_STATE_TYPE_URL));
 

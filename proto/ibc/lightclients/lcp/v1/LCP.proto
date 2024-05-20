@@ -7,14 +7,21 @@ option go_package = "github.com/datachainlab/lcp/go/light-clients/lcp/types";
 
 message UpdateClientMessage {
   bytes proxy_message = 1;
-  bytes signer = 2;
-  bytes signature = 3;
+  repeated bytes signers = 2;
+  repeated bytes signatures = 3;
 }
 
 message RegisterEnclaveKeyMessage {
   string report = 1;
   bytes signature = 2;
   bytes signing_cert = 3;
+  bytes operator_signature = 4;
+}
+
+message UpdateOperatorsMessage {
+  uint64 nonce = 1;
+  repeated bytes new_operators = 2;
+  repeated bytes signatures = 3;
 }
 
 message ClientState {
@@ -26,6 +33,8 @@ message ClientState {
   repeated string allowed_quote_statuses = 5;
   // e.g. INTEL-SA-XXXXX
   repeated string allowed_advisory_ids = 6;
+  uint64 operators_nonce = 7;
+  repeated bytes operators = 8;
 }
 
 message ConsensusState {

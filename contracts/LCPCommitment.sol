@@ -147,8 +147,8 @@ library LCPCommitment {
 
     struct CommitmentProof {
         bytes message;
-        address signer;
-        bytes signature;
+        address[] signers;
+        bytes[] signatures;
     }
 
     struct VerifyMembershipProxyMessage {

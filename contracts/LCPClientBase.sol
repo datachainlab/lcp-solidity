@@ -9,7 +9,8 @@ import {
     IbcLightclientsLcpV1ClientState as ProtoClientState,
     IbcLightclientsLcpV1ConsensusState as ProtoConsensusState,
     IbcLightclientsLcpV1RegisterEnclaveKeyMessage as RegisterEnclaveKeyMessage,
-    IbcLightclientsLcpV1UpdateClientMessage as UpdateClientMessage
+    IbcLightclientsLcpV1UpdateClientMessage as UpdateClientMessage,
+    IbcLightclientsLcpV1UpdateOperatorsMessage as UpdateOperatorsMessage
 } from "./proto/ibc/lightclients/lcp/v1/LCP.sol";
 import {LCPCommitment} from "./LCPCommitment.sol";
 import {LCPProtoMarshaler} from "./LCPProtoMarshaler.sol";
@@ -24,7 +25,15 @@ abstract contract LCPClientBase is ILightClient {
         uint64 timestamp;
     }
 
+    struct EKOperatorInfo {
+        uint256 expiredAt;
+        address key;
+    }
+
     event RegisteredEnclaveKey(string clientId, address enclaveKey, uint256 expiredAt);
+
+    uint8 internal constant operatorsThresholdNumerator = 2;
+    uint8 internal constant operatorsThresholdDenominator = 3;
 
     address immutable ibcHandler;
     // if developmentMode is true, the client allows the remote attestation of IAS in development.
@@ -37,8 +46,14 @@ abstract contract LCPClientBase is ILightClient {
     AVRValidator.RSAParams public verifiedRootCAParams;
     // keccak256(signingCert) => RSAParams of signing public key
     mapping(bytes32 => AVRValidator.RSAParams) public verifiedSigningRSAParams;
-    // clientId => enclave key => expiredAt
-    mapping(string => mapping(address => uint256)) internal enclaveKeys;
+
+    // clientId => enclave key => EKOperatorInfo
+    mapping(string => mapping(address => EKOperatorInfo)) internal enclaveKeys;
+    // clientId => nonce => operators
+    mapping(string => mapping(uint256 => address[])) internal operators;
+    // clientId => operator => nonce(revision)
+    mapping(string => mapping(address => uint256)) internal activeOperators;
+
     // clientId => quote status => flag(0: not allowed, 1: allowed)
     mapping(string => mapping(string => uint256)) internal allowedQuoteStatuses;
     // clientId => advisory id => flag(0: not allowed, 1: allowed)
@@ -87,6 +102,7 @@ abstract contract LCPClientBase is ILightClient {
         require(!clientState.frozen, "client state must not be frozen");
         require(clientState.key_expiration != 0, "key_expiration must be non-zero");
         require(clientState.mrenclave.length == 32, "invalid mrenclave length");
+        require(clientState.operators.length > 0, "operators must not be empty");
         require(consensusState.timestamp == 0 && consensusState.state_id.length == 0, "invalid consensus state");
 
         clientStates[clientId] = clientState;
@@ -155,6 +171,8 @@ abstract contract LCPClientBase is ILightClient {
             return (this.updateClient.selector, args);
         } else if (typeUrlHash == LCPProtoMarshaler.REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL_HASH) {
             return (this.registerEnclaveKey.selector, args);
+        } else if (typeUrlHash == LCPProtoMarshaler.UPDATE_OPERATORS_MESSAGE_TYPE_URL_HASH) {
+            return (this.updateOperators.selector, args);
         } else {
             revert("unknown type url");
         }
@@ -178,23 +196,15 @@ abstract contract LCPClientBase is ILightClient {
             LCPCommitment.CommitmentProof memory commitmentProof,
             LCPCommitment.VerifyMembershipProxyMessage memory message
         ) = LCPCommitment.parseVerifyMembershipCommitmentProof(proof);
-        require(commitmentProof.signature.length == 65, "invalid signature length");
 
         ConsensusState storage consensusState = consensusStates[clientId][message.height.toUint128()];
         require(consensusState.stateId != bytes32(0), "consensus state not found");
-
         require(height.eq(message.height), "invalid height");
         require(keccak256(prefix) == keccak256(message.prefix));
         require(keccak256(path) == keccak256(message.path));
         require(keccak256(value) == message.value, "invalid commitment value");
         require(consensusState.stateId == message.stateId, "invalid state_id");
-        require(isActiveKey(clientId, commitmentProof.signer), "the key isn't active");
-        require(
-            verifyCommitmentProof(keccak256(commitmentProof.message), commitmentProof.signature, commitmentProof.signer),
-            "failed to verify signature"
-        );
-
-        return true;
+        return verifyCommitmentProof(clientId, commitmentProof);
     }
 
     /**
@@ -214,23 +224,36 @@ abstract contract LCPClientBase is ILightClient {
             LCPCommitment.CommitmentProof memory commitmentProof,
             LCPCommitment.VerifyMembershipProxyMessage memory message
         ) = LCPCommitment.parseVerifyMembershipCommitmentProof(proof);
-        require(commitmentProof.signature.length == 65, "invalid signature length");
 
         ConsensusState storage consensusState = consensusStates[clientId][message.height.toUint128()];
         require(consensusState.stateId != bytes32(0), "consensus state not found");
-
         require(height.eq(message.height), "invalid height");
         require(keccak256(prefix) == keccak256(message.prefix));
         require(keccak256(path) == keccak256(message.path));
         require(bytes32(0) == message.value, "invalid commitment value");
         require(consensusState.stateId == message.stateId, "invalid state_id");
-        require(isActiveKey(clientId, commitmentProof.signer), "the key isn't active");
-        require(
-            verifyCommitmentProof(keccak256(commitmentProof.message), commitmentProof.signature, commitmentProof.signer),
-            "failed to verify signature"
-        );
+        return verifyCommitmentProof(clientId, commitmentProof);
+    }
 
-        return true;
+    function verifyCommitmentProof(string calldata clientId, LCPCommitment.CommitmentProof memory commitmentProof)
+        internal
+        view
+        returns (bool)
+    {
+        address[] storage operators_ = operators[clientId][clientStates[clientId].operators_nonce];
+        require(commitmentProof.signers.length == commitmentProof.signatures.length);
+        require(commitmentProof.signers.length == operators_.length);
+        bytes32 commitment = keccak256(commitmentProof.message);
+        uint256 success = 0;
+        for (uint256 i = 0; i < commitmentProof.signatures.length; i++) {
+            address ekAddr = commitmentProof.signers[i];
+            if (ekAddr != address(0) && verifySignature(commitment, commitmentProof.signatures[i], ekAddr)) {
+                require(isActiveKey(clientId, ekAddr), "the key isn't active");
+                require(enclaveKeys[clientId][ekAddr].key == operators_[i], "operator mismatch");
+                success++;
+            }
+        }
+        return success * operatorsThresholdDenominator > operatorsThresholdNumerator * operators_.length;
     }
 
     /**
@@ -273,15 +296,20 @@ abstract contract LCPClientBase is ILightClient {
         public
         returns (Height.Data[] memory heights)
     {
-        require(message.signer.length == 20, "invalid signer length");
-        require(message.signature.length == 65, "invalid signature length");
-
-        require(isActiveKey(clientId, address(bytes20(message.signer))), "the key isn't active");
-        require(
-            verifyCommitmentProof(keccak256(message.proxy_message), message.signature, address(bytes20(message.signer))),
-            "failed to verify the commitment"
-        );
-
+        address[] storage operators_ = operators[clientId][clientStates[clientId].operators_nonce];
+        require(message.signers.length == operators_.length);
+        require(message.signers.length == message.signatures.length);
+        bytes32 commitment = keccak256(message.proxy_message);
+        uint256 success = 0;
+        for (uint256 i = 0; i < message.signers.length; i++) {
+            address ek = address(bytes20(message.signers[i]));
+            if (ek != address(0) && verifySignature(commitment, message.signatures[i], ek)) {
+                require(isActiveKey(clientId, ek), "the key isn't active");
+                require(operators_[i] == enclaveKeys[clientId][ek].key);
+                success++;
+            }
+        }
+        require(success * operatorsThresholdDenominator > operatorsThresholdNumerator * operators_.length);
         LCPCommitment.HeaderedProxyMessage memory hm =
             abi.decode(message.proxy_message, (LCPCommitment.HeaderedProxyMessage));
         if (hm.header == LCPCommitment.LCP_MESSAGE_HEADER_UPDATE_STATE) {
@@ -388,35 +416,82 @@ abstract contract LCPClientBase is ILightClient {
             uint64(LCPUtils.attestationTimestampToSeconds(attestationTimeBytes)) + clientState.key_expiration;
         require(expiredAt > block.timestamp, "the report is already expired");
 
-        if (enclaveKeys[clientId][enclaveKey] != 0) {
-            require(enclaveKeys[clientId][enclaveKey] == expiredAt, "expiredAt mismatch");
+        address operator = verifySignature(keccak256(abi.encodePacked(message.report)), message.operator_signature);
+        require(clientState.operators_nonce == activeOperators[clientId][operator]);
+
+        if (enclaveKeys[clientId][enclaveKey].expiredAt != 0) {
+            require(enclaveKeys[clientId][enclaveKey].key == operator, "operator mismatch");
+            require(enclaveKeys[clientId][enclaveKey].expiredAt == expiredAt, "expiredAt mismatch");
             // NOTE: if the key already exists, don't update any state
             return heights;
         }
 
-        enclaveKeys[clientId][enclaveKey] = expiredAt;
+        enclaveKeys[clientId][enclaveKey].key = operator;
+        enclaveKeys[clientId][enclaveKey].expiredAt = expiredAt;
         emit RegisteredEnclaveKey(clientId, enclaveKey, expiredAt);
 
         // Note: client and consensus state are not always updated in registerEnclaveKey
         return heights;
     }
 
+    function updateOperators(string calldata clientId, UpdateOperatorsMessage.Data calldata message)
+        public
+        returns (Height.Data[] memory heights)
+    {
+        address[] storage operators_ = operators[clientId][clientStates[clientId].operators_nonce];
+        require(message.signatures.length == operators_.length);
+        uint64 nonce = clientStates[clientId].operators_nonce;
+        uint64 nextNonce = nonce + 1;
+        bytes32 commitment =
+            computeUpdateOperatorsCommitment(clientId, nextNonce, computeOperatorsHash(message.new_operators));
+        uint256 success = 0;
+        for (uint256 i = 0; i < message.signatures.length; i++) {
+            if (verifySignature(commitment, message.signatures[i], operators_[i])) {
+                success++;
+            }
+        }
+        require(success * operatorsThresholdDenominator > operatorsThresholdNumerator * operators_.length);
+        delete operators[clientId][nonce];
+        delete clientStates[clientId].operators;
+        for (uint256 i = 0; i < message.new_operators.length; i++) {
+            address opAddr = address(bytes20(message.new_operators[i]));
+            activeOperators[clientId][opAddr] = nextNonce;
+            operators[clientId][nextNonce].push(opAddr);
+            clientStates[clientId].operators.push(message.new_operators[i]);
+        }
+        clientStates[clientId].operators_nonce = nextNonce;
+        return heights;
+    }
+
+    function computeUpdateOperatorsCommitment(string memory clientId, uint256 nonce, bytes32 operatorsHash)
+        public
+        view
+        returns (bytes32)
+    {
+        bytes32 envHash = keccak256(abi.encodePacked(uint16(1), uint16(1), block.chainid, address(this)));
+        return keccak256(abi.encodePacked(envHash, clientId, nonce, operatorsHash));
+    }
+
+    function computeOperatorsHash(bytes[] calldata _validators) internal pure returns (bytes32) {
+        return keccak256(abi.encode(_validators));
+    }
+
     function isActiveKey(string calldata clientId, address signer) internal view returns (bool) {
-        uint256 expiredAt = enclaveKeys[clientId][signer];
+        uint256 expiredAt = enclaveKeys[clientId][signer].expiredAt;
         if (expiredAt == 0) {
             return false;
         }
         return expiredAt > block.timestamp;
     }
 
-    function verifyCommitmentProof(bytes32 commitment, bytes memory signature, address signer)
-        internal
-        pure
-        returns (bool)
-    {
+    function verifySignature(bytes32 commitment, bytes memory signature, address signer) internal pure returns (bool) {
+        return verifySignature(commitment, signature) == signer;
+    }
+
+    function verifySignature(bytes32 commitment, bytes memory signature) internal pure returns (address) {
         if (uint8(signature[64]) < 27) {
             signature[64] = bytes1(uint8(signature[64]) + 27);
         }
-        return ECDSA.recover(commitment, signature) == signer;
+        return ECDSA.recover(commitment, signature);
     }
 }
