@@ -14,7 +14,6 @@ import {
 } from "./proto/ibc/lightclients/lcp/v1/LCP.sol";
 import {LCPCommitment} from "./LCPCommitment.sol";
 import {LCPProtoMarshaler} from "./LCPProtoMarshaler.sol";
-import {LCPUtils} from "./LCPUtils.sol";
 import {AVRValidator} from "./AVRValidator.sol";
 import {ILCPClientErrors} from "./ILCPClientErrors.sol";
 
@@ -460,16 +459,14 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         }
 
         ProtoClientState.Data storage clientState = clientStates[clientId];
-        (address enclaveKey, bytes memory attestationTimeBytes, bytes32 mrenclave) = AVRValidator
-            .validateAndExtractElements(
+        (address enclaveKey, uint256 attestationTime, bytes32 mrenclave) = AVRValidator.validateAndExtractElements(
             developmentMode, bytes(message.report), allowedQuoteStatuses[clientId], allowedAdvisories[clientId]
         );
         if (bytes32(clientState.mrenclave) != mrenclave) {
             revert LCPClientClientStateUnexpectedMrenclave();
         }
 
-        uint256 expiredAt =
-            uint64(LCPUtils.attestationTimestampToSeconds(attestationTimeBytes)) + clientState.key_expiration;
+        uint256 expiredAt = attestationTime + clientState.key_expiration;
         if (expiredAt <= block.timestamp) {
             revert LCPClientAVRAlreadyExpired();
         }

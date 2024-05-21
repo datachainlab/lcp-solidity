@@ -61,7 +61,7 @@ library AVRValidator {
         bytes calldata signature,
         bytes calldata exponent,
         bytes calldata modulus
-    ) external view returns (bool) {
+    ) public view returns (bool) {
         (bool ok, bytes memory result) = RSAVerify.rsarecover(modulus, exponent, signature);
         // Verify it ends with the hash of our data
         return ok && reportSha256 == result.readBytes32(result.length - 32);
@@ -269,7 +269,7 @@ library AVRValidator {
         bytes calldata report,
         mapping(string => uint256) storage allowedQuoteStatuses,
         mapping(string => uint256) storage allowedAdvisories
-    ) external view returns (address, bytes memory, bytes32) {
+    ) public view returns (address, uint256, bytes32) {
         // find 'timestamp' key
         (uint256 i, bytes memory timestamp) = consumeTimestampReportJSON(report, 0);
         uint256 checkpoint;
@@ -316,7 +316,11 @@ library AVRValidator {
             require(attributesFlags & uint8(2) == uint8(0), "disallowed debug enclave");
         }
 
-        return (address(quoteDecoded.readBytes20(368)), timestamp, quoteDecoded.readBytes32(112));
+        return (
+            address(quoteDecoded.readBytes20(368)),
+            LCPUtils.attestationTimestampToSeconds(timestamp),
+            quoteDecoded.readBytes32(112)
+        );
     }
 
     function validateAdvisories(
