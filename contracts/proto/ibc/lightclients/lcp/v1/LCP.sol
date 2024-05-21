@@ -1109,8 +1109,10 @@ library IbcLightclientsLcpV1ClientState {
     Height.Data latest_height;
     string[] allowed_quote_statuses;
     string[] allowed_advisory_ids;
-    uint64 operators_nonce;
     bytes[] operators;
+    uint64 operators_nonce;
+    uint64 operators_threshold_numerator;
+    uint64 operators_threshold_denominator;
   }
 
   // Decoder section
@@ -1150,7 +1152,7 @@ library IbcLightclientsLcpV1ClientState {
     returns (Data memory, uint)
   {
     Data memory r;
-    uint[9] memory counters;
+    uint[11] memory counters;
     uint256 fieldId;
     ProtoBufRuntime.WireType wireType;
     uint256 bytesRead;
@@ -1178,10 +1180,16 @@ library IbcLightclientsLcpV1ClientState {
         pointer += _read_unpacked_repeated_allowed_advisory_ids(pointer, bs, nil(), counters);
       } else
       if (fieldId == 7) {
-        pointer += _read_operators_nonce(pointer, bs, r);
+        pointer += _read_unpacked_repeated_operators(pointer, bs, nil(), counters);
       } else
       if (fieldId == 8) {
-        pointer += _read_unpacked_repeated_operators(pointer, bs, nil(), counters);
+        pointer += _read_operators_nonce(pointer, bs, r);
+      } else
+      if (fieldId == 9) {
+        pointer += _read_operators_threshold_numerator(pointer, bs, r);
+      } else
+      if (fieldId == 10) {
+        pointer += _read_operators_threshold_denominator(pointer, bs, r);
       } else
       {
         pointer += ProtoBufRuntime._skip_field_decode(wireType, pointer, bs);
@@ -1197,9 +1205,9 @@ library IbcLightclientsLcpV1ClientState {
       require(r.allowed_advisory_ids.length == 0);
       r.allowed_advisory_ids = new string[](counters[6]);
     }
-    if (counters[8] > 0) {
+    if (counters[7] > 0) {
       require(r.operators.length == 0);
-      r.operators = new bytes[](counters[8]);
+      r.operators = new bytes[](counters[7]);
     }
 
     while (pointer < offset + sz) {
@@ -1211,7 +1219,7 @@ library IbcLightclientsLcpV1ClientState {
       if (fieldId == 6) {
         pointer += _read_unpacked_repeated_allowed_advisory_ids(pointer, bs, r, counters);
       } else
-      if (fieldId == 8) {
+      if (fieldId == 7) {
         pointer += _read_unpacked_repeated_operators(pointer, bs, r, counters);
       } else
       {
@@ -1303,7 +1311,7 @@ library IbcLightclientsLcpV1ClientState {
     uint256 p,
     bytes memory bs,
     Data memory r,
-    uint[9] memory counters
+    uint[11] memory counters
   ) internal pure returns (uint) {
     /**
      * if `r` is NULL, then only counting the number of fields.
@@ -1330,7 +1338,7 @@ library IbcLightclientsLcpV1ClientState {
     uint256 p,
     bytes memory bs,
     Data memory r,
-    uint[9] memory counters
+    uint[11] memory counters
   ) internal pure returns (uint) {
     /**
      * if `r` is NULL, then only counting the number of fields.
@@ -1341,6 +1349,33 @@ library IbcLightclientsLcpV1ClientState {
     } else {
       r.allowed_advisory_ids[r.allowed_advisory_ids.length - counters[6]] = x;
       counters[6] -= 1;
+    }
+    return sz;
+  }
+
+  /**
+   * @dev The decoder for reading a field
+   * @param p The offset of bytes array to start decode
+   * @param bs The bytes array to be decoded
+   * @param r The in-memory struct
+   * @param counters The counters for repeated fields
+   * @return The number of bytes decoded
+   */
+  function _read_unpacked_repeated_operators(
+    uint256 p,
+    bytes memory bs,
+    Data memory r,
+    uint[11] memory counters
+  ) internal pure returns (uint) {
+    /**
+     * if `r` is NULL, then only counting the number of fields.
+     */
+    (bytes memory x, uint256 sz) = ProtoBufRuntime._decode_bytes(p, bs);
+    if (isNil(r)) {
+      counters[7] += 1;
+    } else {
+      r.operators[r.operators.length - counters[7]] = x;
+      counters[7] -= 1;
     }
     return sz;
   }
@@ -1367,25 +1402,32 @@ library IbcLightclientsLcpV1ClientState {
    * @param p The offset of bytes array to start decode
    * @param bs The bytes array to be decoded
    * @param r The in-memory struct
-   * @param counters The counters for repeated fields
    * @return The number of bytes decoded
    */
-  function _read_unpacked_repeated_operators(
+  function _read_operators_threshold_numerator(
     uint256 p,
     bytes memory bs,
-    Data memory r,
-    uint[9] memory counters
+    Data memory r
   ) internal pure returns (uint) {
-    /**
-     * if `r` is NULL, then only counting the number of fields.
-     */
-    (bytes memory x, uint256 sz) = ProtoBufRuntime._decode_bytes(p, bs);
-    if (isNil(r)) {
-      counters[8] += 1;
-    } else {
-      r.operators[r.operators.length - counters[8]] = x;
-      counters[8] -= 1;
-    }
+    (uint64 x, uint256 sz) = ProtoBufRuntime._decode_uint64(p, bs);
+    r.operators_threshold_numerator = x;
+    return sz;
+  }
+
+  /**
+   * @dev The decoder for reading a field
+   * @param p The offset of bytes array to start decode
+   * @param bs The bytes array to be decoded
+   * @param r The in-memory struct
+   * @return The number of bytes decoded
+   */
+  function _read_operators_threshold_denominator(
+    uint256 p,
+    bytes memory bs,
+    Data memory r
+  ) internal pure returns (uint) {
+    (uint64 x, uint256 sz) = ProtoBufRuntime._decode_uint64(p, bs);
+    r.operators_threshold_denominator = x;
     return sz;
   }
 
@@ -1500,25 +1542,43 @@ library IbcLightclientsLcpV1ClientState {
       pointer += ProtoBufRuntime._encode_string(r.allowed_advisory_ids[i], pointer, bs);
     }
     }
-    if (r.operators_nonce != 0) {
-    pointer += ProtoBufRuntime._encode_key(
-      7,
-      ProtoBufRuntime.WireType.Varint,
-      pointer,
-      bs
-    );
-    pointer += ProtoBufRuntime._encode_uint64(r.operators_nonce, pointer, bs);
-    }
     if (r.operators.length != 0) {
     for(i = 0; i < r.operators.length; i++) {
       pointer += ProtoBufRuntime._encode_key(
-        8,
+        7,
         ProtoBufRuntime.WireType.LengthDelim,
         pointer,
         bs)
       ;
       pointer += ProtoBufRuntime._encode_bytes(r.operators[i], pointer, bs);
     }
+    }
+    if (r.operators_nonce != 0) {
+    pointer += ProtoBufRuntime._encode_key(
+      8,
+      ProtoBufRuntime.WireType.Varint,
+      pointer,
+      bs
+    );
+    pointer += ProtoBufRuntime._encode_uint64(r.operators_nonce, pointer, bs);
+    }
+    if (r.operators_threshold_numerator != 0) {
+    pointer += ProtoBufRuntime._encode_key(
+      9,
+      ProtoBufRuntime.WireType.Varint,
+      pointer,
+      bs
+    );
+    pointer += ProtoBufRuntime._encode_uint64(r.operators_threshold_numerator, pointer, bs);
+    }
+    if (r.operators_threshold_denominator != 0) {
+    pointer += ProtoBufRuntime._encode_key(
+      10,
+      ProtoBufRuntime.WireType.Varint,
+      pointer,
+      bs
+    );
+    pointer += ProtoBufRuntime._encode_uint64(r.operators_threshold_denominator, pointer, bs);
     }
     return pointer - offset;
   }
@@ -1573,10 +1633,12 @@ library IbcLightclientsLcpV1ClientState {
     for(i = 0; i < r.allowed_advisory_ids.length; i++) {
       e += 1 + ProtoBufRuntime._sz_lendelim(bytes(r.allowed_advisory_ids[i]).length);
     }
-    e += 1 + ProtoBufRuntime._sz_uint64(r.operators_nonce);
     for(i = 0; i < r.operators.length; i++) {
       e += 1 + ProtoBufRuntime._sz_lendelim(r.operators[i].length);
     }
+    e += 1 + ProtoBufRuntime._sz_uint64(r.operators_nonce);
+    e += 1 + ProtoBufRuntime._sz_uint64(r.operators_threshold_numerator);
+    e += 1 + ProtoBufRuntime._sz_uint64(r.operators_threshold_denominator);
     return e;
   }
   // empty checker
@@ -1605,11 +1667,19 @@ library IbcLightclientsLcpV1ClientState {
     return false;
   }
 
+  if (r.operators.length != 0) {
+    return false;
+  }
+
   if (r.operators_nonce != 0) {
     return false;
   }
 
-  if (r.operators.length != 0) {
+  if (r.operators_threshold_numerator != 0) {
+    return false;
+  }
+
+  if (r.operators_threshold_denominator != 0) {
     return false;
   }
 
@@ -1630,8 +1700,10 @@ library IbcLightclientsLcpV1ClientState {
     Height.store(input.latest_height, output.latest_height);
     output.allowed_quote_statuses = input.allowed_quote_statuses;
     output.allowed_advisory_ids = input.allowed_advisory_ids;
-    output.operators_nonce = input.operators_nonce;
     output.operators = input.operators;
+    output.operators_nonce = input.operators_nonce;
+    output.operators_threshold_numerator = input.operators_threshold_numerator;
+    output.operators_threshold_denominator = input.operators_threshold_denominator;
 
   }
 

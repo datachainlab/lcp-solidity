@@ -33,8 +33,10 @@ message ClientState {
   repeated string allowed_quote_statuses = 5;
   // e.g. INTEL-SA-XXXXX
   repeated string allowed_advisory_ids = 6;
-  uint64 operators_nonce = 7;
-  repeated bytes operators = 8;
+  repeated bytes operators = 7;
+  uint64 operators_nonce = 8;
+  uint64 operators_threshold_numerator = 9;
+  uint64 operators_threshold_denominator = 10;
 }
 
 message ConsensusState {

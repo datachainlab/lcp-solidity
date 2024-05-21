@@ -10,6 +10,7 @@ interface ILCPClientErrors {
     error LCPClientClientStateUnexpectedMrenclave();
 
     error LCPClientClientStateEmptyOperators();
+    error LCPClientClientStateInvalidOperatorsThreshold();
 
     error LCPClientConsensusStateInvalidTimestamp();
     error LCPClientConsensusStateInvalidStateId();
