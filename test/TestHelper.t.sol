@@ -12,7 +12,8 @@ abstract contract BasicTest is Test {
 
     function readJSON(string memory path, string memory filter) internal virtual returns (bytes memory) {
         string memory json = vm.readFile(path);
-        return json.readBytes(filter);
+        string memory ret = abi.decode(vm.parseJson(json, filter), (string));
+        return bytes(ret);
     }
 
     function readDecodedBytes(string memory path, string memory filter) internal returns (bytes memory) {
@@ -26,7 +27,7 @@ abstract contract BasicTest is Test {
         returns (string memory)
     {
         string memory json = vm.readFile(path);
-        string memory data = json.readString(firstFilter);
+        string memory data = abi.decode(vm.parseJson(json, firstFilter), (string));
         return data.readString(secondFilter);
     }
 
@@ -37,7 +38,7 @@ abstract contract BasicTest is Test {
         returns (string[] memory)
     {
         string memory json = vm.readFile(path);
-        string memory data = json.readString(firstFilter);
+        string memory data = abi.decode(vm.parseJson(json, firstFilter), (string));
         return data.readStringArray(secondFilter);
     }
 }
