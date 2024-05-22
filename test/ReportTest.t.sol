@@ -94,8 +94,8 @@ contract ReportTest is BasicTest {
             }
             bytes memory report = readReport(c.path);
             try AVRValidator.validateAndExtractElements(false, report, allowedQuoteStatuses, allowedAdvisories)
-            returns (address, bytes memory, bytes32) {
-                require(false, "An AVR for debug enclave must be disallowed");
+            returns (address, uint256, bytes32) {
+                revert("An AVR for debug enclave must be disallowed");
             } catch (bytes memory) {}
         }
     }

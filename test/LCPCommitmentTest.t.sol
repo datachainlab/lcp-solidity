@@ -14,12 +14,12 @@ contract LCPCommitmentTest is BasicTest {
             LCPCommitment.TrustingPeriodContext(1692489600000000000, 1692489600000000000, 1, 1), 1692489600000000000
         );
 
-        vm.expectRevert(bytes("out of trusting period"));
+        vm.expectRevert(LCPCommitment.LCPCommtimentTrustingPeriodContextOutOfTrustingPeriod.selector);
         LCPCommitmentTestHelper.trustingPeriodContextEval(
             LCPCommitment.TrustingPeriodContext(1692489599999999999, 1692489599999999998, 1, 0), 1692489600000000000
         );
 
-        vm.expectRevert(bytes("out of trusting period"));
+        vm.expectRevert(LCPCommitment.LCPCommtimentTrustingPeriodContextOutOfTrustingPeriod.selector);
         LCPCommitmentTestHelper.trustingPeriodContextEval(
             LCPCommitment.TrustingPeriodContext(1692489599999999999, 1692489599999999998, 2, 0), 1692489600000000000
         );
@@ -29,12 +29,12 @@ contract LCPCommitmentTest is BasicTest {
             LCPCommitment.TrustingPeriodContext(1692489599999999999, 1692489599999999998, 3, 0), 1692489600000000000
         );
 
-        vm.expectRevert(bytes("header is from the future"));
+        vm.expectRevert(LCPCommitment.LCPCommitmentTrustingPeriodHeaderFromFuture.selector);
         LCPCommitmentTestHelper.trustingPeriodContextEval(
             LCPCommitment.TrustingPeriodContext(1692489600000000001, 1692489600000000000, 1, 0), 1692489600000000000
         );
 
-        vm.expectRevert(bytes("header is from the future"));
+        vm.expectRevert(LCPCommitment.LCPCommitmentTrustingPeriodHeaderFromFuture.selector);
         LCPCommitmentTestHelper.trustingPeriodContextEval(
             LCPCommitment.TrustingPeriodContext(1692489600000000001, 1692489600000000000, 1, 1), 1692489600000000000
         );
