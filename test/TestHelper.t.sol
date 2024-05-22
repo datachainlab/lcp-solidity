@@ -41,6 +41,21 @@ abstract contract BasicTest is Test {
         string memory data = abi.decode(vm.parseJson(json, firstFilter), (string));
         return data.readStringArray(secondFilter);
     }
+
+    function newCommitmentProof(bytes memory message, bytes memory signer, bytes memory signature)
+        internal
+        pure
+        returns (LCPCommitment.CommitmentProof memory)
+    {
+        require(signer.length == 20, "invalid signer length");
+        LCPCommitment.CommitmentProof memory commitmentProof;
+        commitmentProof.message = message;
+        commitmentProof.signers = new address[](1);
+        commitmentProof.signers[0] = address(bytes20(signer));
+        commitmentProof.signatures = new bytes[](1);
+        commitmentProof.signatures[0] = signature;
+        return commitmentProof;
+    }
 }
 
 library TestLCPUtils {

@@ -21,6 +21,9 @@ contract LCPClientTest is BasicTest {
     using BytesUtils for bytes;
     using IBCHeight for Height.Data;
 
+    uint256 internal immutable testOperatorPrivKey;
+    address internal immutable testOperator;
+
     TestContext testContext;
     LCPClient iasLC;
     LCPClient simulationLC;
@@ -36,6 +39,10 @@ contract LCPClientTest is BasicTest {
     struct TestContext {
         string dir;
         LCPClient lc;
+    }
+
+    constructor() {
+        (testOperator, testOperatorPrivKey) = makeAddrAndKey("alice");
     }
 
     function setTestContext(TestContext memory tc) internal {
@@ -72,7 +79,7 @@ contract LCPClientTest is BasicTest {
         string memory clientId = generateClientId(1);
         LCPClient lc = testContext.lc;
         {
-            ClientState.Data memory clientState = createInitialState(commandAvrFile);
+            ClientState.Data memory clientState = createInitialState(commandAvrFile, testOperator);
             ConsensusState.Data memory consensusState;
             Height.Data memory height = lc.initializeClient(
                 clientId, LCPProtoMarshaler.marshal(clientState), LCPProtoMarshaler.marshal(consensusState)
@@ -134,7 +141,10 @@ contract LCPClientTest is BasicTest {
         }
     }
 
-    function createInitialState(string memory avrFile) internal returns (ClientState.Data memory clientState) {
+    function createInitialState(string memory avrFile, address operator)
+        internal
+        returns (ClientState.Data memory clientState)
+    {
         bytes memory mrenclave = readDecodedBytes(avrFile, ".mrenclave");
         require(mrenclave.length == 32, "the length must be 32");
 
@@ -142,6 +152,12 @@ contract LCPClientTest is BasicTest {
         clientState.mrenclave = mrenclave;
         clientState.key_expiration = 60 * 60 * 24 * 7;
         clientState.frozen = false;
+
+        clientState.operators = new bytes[](1);
+        clientState.operators[0] = abi.encodePacked(operator);
+        clientState.operators_nonce = 1;
+        clientState.operators_threshold_numerator = 1;
+        clientState.operators_threshold_denominator = 1;
 
         // WARNING: the following configuration is for testing purpose only
         clientState.allowed_quote_statuses = new string[](1);
@@ -156,6 +172,8 @@ contract LCPClientTest is BasicTest {
         message.report = string(readJSON(avrFile, ".avr"));
         message.signature = readDecodedBytes(avrFile, ".signature");
         message.signing_cert = readDecodedBytes(avrFile, ".signing_cert");
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(testOperatorPrivKey, keccak256(bytes(message.report)));
+        message.operator_signature = abi.encodePacked(r, s, v);
     }
 
     function createUpdateClientMessage(string memory updateClientFilePrefix)
@@ -164,9 +182,11 @@ contract LCPClientTest is BasicTest {
     {
         message.proxy_message =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".message");
-        message.signer =
+        message.signers = new bytes[](1);
+        message.signers[0] =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".signer");
-        message.signature =
+        message.signatures = new bytes[](1);
+        message.signatures[0] =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".signature");
     }
 
@@ -190,13 +210,7 @@ contract LCPClientTest is BasicTest {
             bytes memory signature = readDecodedBytes(
                 string(abi.encodePacked(verifyMembershipFilePrefix, commandResultSuffix)), ".signature"
             );
-            proof = abi.encode(
-                LCPCommitment.CommitmentProof({
-                    message: messageBytes,
-                    signer: address(bytes20(signer)),
-                    signature: signature
-                })
-            );
+            proof = abi.encode(newCommitmentProof(messageBytes, signer, signature));
         }
         (, LCPCommitment.VerifyMembershipProxyMessage memory message) =
             LCPCommitmentTestHelper.parseVerifyMembershipCommitmentProof(proof);
@@ -218,13 +232,7 @@ contract LCPClientTest is BasicTest {
         require(signer.length == 20, "signer length must be 20");
         bytes memory signature =
             readDecodedBytes(string(abi.encodePacked(verifyNonMembershipFilePrefix, commandResultSuffix)), ".signature");
-        proof = abi.encode(
-            LCPCommitment.CommitmentProof({
-                message: messageBytes,
-                signer: address(bytes20(signer)),
-                signature: signature
-            })
-        );
+        proof = abi.encode(newCommitmentProof(messageBytes, signer, signature));
         (, LCPCommitment.VerifyMembershipProxyMessage memory message) =
             LCPCommitmentTestHelper.parseVerifyMembershipCommitmentProof(proof);
         assert(message.value == bytes32(0));
