@@ -264,7 +264,7 @@ abstract contract LCPClientBase is ILightClient {
                     timestamp: consensusState.timestamp,
                     state_id: abi.encodePacked(consensusState.stateId)
                 })
-                ),
+            ),
             true
         );
     }
