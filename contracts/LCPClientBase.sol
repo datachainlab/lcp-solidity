@@ -109,6 +109,9 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         if (clientState.operators.length == 0) {
             revert LCPClientClientStateEmptyOperators();
         }
+        if (clientState.operators_nonce == 0) {
+            revert LCPClientClientStateInvalidOperatorsNonce();
+        }
         if (
             clientState.operators_threshold_numerator == 0 || clientState.operators_threshold_denominator == 0
                 || clientState.operators_threshold_numerator > clientState.operators_threshold_denominator
@@ -120,6 +123,15 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         }
         if (consensusState.state_id.length != 0) {
             revert LCPClientConsensusStateInvalidStateId();
+        }
+
+        for (uint256 i = 0; i < clientState.operators.length; i++) {
+            address operator = address(bytes20(clientState.operators[i]));
+            if (activeOperators[clientId][operator] == clientState.operators_nonce) {
+                revert LCPClientOperatorDuplicate(operator, clientState.operators_nonce);
+            }
+            activeOperators[clientId][operator] = clientState.operators_nonce;
+            operators[clientId][clientState.operators_nonce].push(operator);
         }
 
         clientStates[clientId] = clientState;
@@ -296,7 +308,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         }
         if (
             success * clientState.operators_threshold_denominator
-                <= clientState.operators_threshold_numerator * operators_.length
+                < clientState.operators_threshold_numerator * operators_.length
         ) {
             revert LCPClientOperatorSignaturesInsufficient(success);
         }
@@ -351,7 +363,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         ProtoClientState.Data storage clientState = clientStates[clientId];
         if (
             success * clientState.operators_threshold_denominator
-                <= clientState.operators_threshold_numerator * operators_.length
+                < clientState.operators_threshold_numerator * operators_.length
         ) {
             revert LCPClientOperatorSignaturesInsufficient(success);
         }
@@ -525,7 +537,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         }
         if (
             success * clientState.operators_threshold_denominator
-                <= clientState.operators_threshold_numerator * operators_.length
+                < clientState.operators_threshold_numerator * operators_.length
         ) {
             revert LCPClientOperatorSignaturesInsufficient(success);
         }
