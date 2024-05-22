@@ -46,8 +46,6 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
 
     // clientId => enclave key => EKOperatorInfo
     mapping(string => mapping(address => EKOperatorInfo)) internal enclaveKeys;
-    // clientId => nonce => operators
-    mapping(string => mapping(uint256 => address[])) internal operators;
     // clientId => operator => nonce(revision)
     mapping(string => mapping(address => uint256)) internal activeOperators;
 
@@ -131,7 +129,6 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
                 revert LCPClientOperatorDuplicate(operator, clientState.operators_nonce);
             }
             activeOperators[clientId][operator] = clientState.operators_nonce;
-            operators[clientId][clientState.operators_nonce].push(operator);
         }
 
         clientStates[clientId] = clientState;
@@ -292,26 +289,21 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         view
     {
         ProtoClientState.Data storage clientState = clientStates[clientId];
-        address[] storage operators_ = operators[clientId][clientState.operators_nonce];
-        require(commitmentProof.signers.length == commitmentProof.signatures.length);
-        require(commitmentProof.signers.length == operators_.length);
+        uint256 signerNum = commitmentProof.signers.length;
+        require(signerNum == commitmentProof.signatures.length);
+        require(signerNum == clientState.operators.length);
         bytes32 commitment = keccak256(commitmentProof.message);
         uint256 success = 0;
-        for (uint256 i = 0; i < commitmentProof.signatures.length; i++) {
+        for (uint256 i = 0; i < signerNum; i++) {
             address ekAddr = commitmentProof.signers[i];
             if (ekAddr != address(0) && verifySignature(commitment, commitmentProof.signatures[i], ekAddr)) {
-                ensureActiveKey(clientId, ekAddr, operators_[i]);
+                ensureActiveKey(clientId, ekAddr, address(bytes20(clientState.operators[i])));
                 unchecked {
                     success++;
                 }
             }
         }
-        if (
-            success * clientState.operators_threshold_denominator
-                < clientState.operators_threshold_numerator * operators_.length
-        ) {
-            revert LCPClientOperatorSignaturesInsufficient(success);
-        }
+        ensureSufficientValidSignatures(clientState, success);
     }
 
     /**
@@ -346,27 +338,21 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         public
         returns (Height.Data[] memory heights)
     {
-        address[] storage operators_ = operators[clientId][clientStates[clientId].operators_nonce];
-        require(message.signers.length == operators_.length);
+        ProtoClientState.Data storage clientState = clientStates[clientId];
+        require(message.signers.length == clientState.operators.length);
         require(message.signers.length == message.signatures.length);
         bytes32 commitment = keccak256(message.proxy_message);
         uint256 success = 0;
         for (uint256 i = 0; i < message.signers.length; i++) {
             address ekAddr = address(bytes20(message.signers[i]));
             if (ekAddr != address(0) && verifySignature(commitment, message.signatures[i], ekAddr)) {
-                ensureActiveKey(clientId, ekAddr, operators_[i]);
+                ensureActiveKey(clientId, ekAddr, address(bytes20(clientState.operators[i])));
                 unchecked {
                     success++;
                 }
             }
         }
-        ProtoClientState.Data storage clientState = clientStates[clientId];
-        if (
-            success * clientState.operators_threshold_denominator
-                < clientState.operators_threshold_numerator * operators_.length
-        ) {
-            revert LCPClientOperatorSignaturesInsufficient(success);
-        }
+        ensureSufficientValidSignatures(clientState, success);
         LCPCommitment.HeaderedProxyMessage memory hm =
             abi.decode(message.proxy_message, (LCPCommitment.HeaderedProxyMessage));
         if (hm.header == LCPCommitment.LCP_MESSAGE_HEADER_UPDATE_STATE) {
@@ -520,33 +506,25 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         public
         returns (Height.Data[] memory heights)
     {
-        address[] storage operators_ = operators[clientId][clientStates[clientId].operators_nonce];
-        require(message.signatures.length == operators_.length);
         ProtoClientState.Data storage clientState = clientStates[clientId];
+        require(message.signatures.length == clientState.operators.length);
         uint64 nonce = clientState.operators_nonce;
         uint64 nextNonce = nonce + 1;
         bytes32 commitment =
             computeUpdateOperatorsCommitment(clientId, nextNonce, computeOperatorsHash(message.new_operators));
         uint256 success = 0;
         for (uint256 i = 0; i < message.signatures.length; i++) {
-            if (verifySignature(commitment, message.signatures[i], operators_[i])) {
+            if (verifySignature(commitment, message.signatures[i], address(bytes20(clientState.operators[i])))) {
                 unchecked {
                     success++;
                 }
             }
         }
-        if (
-            success * clientState.operators_threshold_denominator
-                < clientState.operators_threshold_numerator * operators_.length
-        ) {
-            revert LCPClientOperatorSignaturesInsufficient(success);
-        }
-        delete operators[clientId][nonce];
+        ensureSufficientValidSignatures(clientState, success);
         delete clientState.operators;
         for (uint256 i = 0; i < message.new_operators.length; i++) {
             address opAddr = address(bytes20(message.new_operators[i]));
             activeOperators[clientId][opAddr] = nextNonce;
-            operators[clientId][nextNonce].push(opAddr);
             clientState.operators.push(message.new_operators[i]);
         }
         clientState.operators_nonce = nextNonce;
@@ -576,6 +554,18 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         }
         if (enclaveKeys[clientId][ekAddr].key != opAddr) {
             revert LCPClientEnclaveKeyUnexpectedOperator();
+        }
+    }
+
+    function ensureSufficientValidSignatures(ProtoClientState.Data storage clientState, uint256 success)
+        internal
+        view
+    {
+        if (
+            success * clientState.operators_threshold_denominator
+                < clientState.operators_threshold_numerator * clientState.operators.length
+        ) {
+            revert LCPClientOperatorSignaturesInsufficient(success);
         }
     }
 
