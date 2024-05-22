@@ -166,13 +166,11 @@ contract CertificateTest is BasicTest {
     }
 
     function runCmd(string[] memory cmd) internal {
-        // NOTE: vm.tryFfi will be supported after forge-std v1.6.1
-        // Vm.FfiResult memory f = vm.tryFfi(cmd);
-        // string memory cmdStr;
-        // for (uint256 i = 0; i < cmd.length; i++) {
-        //     cmdStr = string(abi.encodePacked(cmdStr, cmd[i], " "));
-        // }
-        // require(f.exit_code == 0, cmdStr);
-        vm.ffi(cmd);
+        Vm.FfiResult memory f = vm.tryFfi(cmd);
+        string memory cmdStr;
+        for (uint256 i = 0; i < cmd.length; i++) {
+            cmdStr = string(abi.encodePacked(cmdStr, cmd[i], " "));
+        }
+        require(f.exitCode == 0, string(abi.encodePacked("Failed to run command: ", cmdStr, " err: ", f.stderr)));
     }
 }

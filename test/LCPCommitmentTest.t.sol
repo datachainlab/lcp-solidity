@@ -128,7 +128,7 @@ contract LCPCommitmentTest is BasicTest {
                             height: Height.Data({revision_number: 13685334471210737826, revision_height: 1770131620500555974}),
                             state: hex"0a032f7b5c120cd76f2c912996f2be19b7170a"
                         })
-                        )
+                    )
                 })
             }),
             UpdateStateProxyMessageEmptyValidationContextTestCase({
@@ -169,7 +169,7 @@ contract LCPCommitmentTest is BasicTest {
                             height: Height.Data({revision_number: 8866013149625824704, revision_height: 4684689038830282548}),
                             state: hex"0a1e2fe1af8d5ae0bb9ee2b6bee3839a7c2ef09e80a0d4b422d1a838f09d92b71224296d0e9a1af96c6abd94776c6a6712a26248ec9ce799e2ea840e022a4ee0628f97a1c037"
                         })
-                        )
+                    )
                 })
             })
         ];
@@ -222,7 +222,7 @@ contract LCPCommitmentTest is BasicTest {
                             height: Height.Data({revision_number: 1697932104932258313, revision_height: 479298583296561469}),
                             state: hex"0a2f2f47e0bb9c2f2e79e0b781c392f090a8b468f09d95823f323625e1a4a7f0938ba65b22f0919994f09184b4e18a812e1223eefc5d8d58f25e045711ca55500d03de3c797f8143d44bf988ec4a93a58a32f7ae4ffa"
                         })
-                        )
+                    )
                 }),
                 expectedContext: LCPCommitment.TrustingPeriodContext({
                     untrustedHeaderTimestamp: 167127089491534006602,
@@ -245,7 +245,7 @@ contract LCPCommitmentTest is BasicTest {
                             height: Height.Data({revision_number: 12119976101036946210, revision_height: 148768159817549430}),
                             state: hex"0a212ff0908da2f0909e84f09eb99d3f2aeaa0b0eaada4f09b8b84262cf09f95b42f3a120c66b0afcb5ad607c8580152fe"
                         })
-                        )
+                    )
                 }),
                 expectedContext: LCPCommitment.TrustingPeriodContext({
                     untrustedHeaderTimestamp: 133014698417852679330,
@@ -368,7 +368,7 @@ contract LCPCommitmentTest is BasicTest {
                             height: Height.Data({revision_number: 17314810083870628749, revision_height: 8111019612478773749}),
                             stateId: hex"08a2eb71cc12ee1a51867f497db5a2d2f8ab81ac53b1aa5064a737a307413bad"
                         })
-                        ),
+                    ),
                     context: hex"00000000000000000000000000000000000000000000000000000000000000200001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000400000000000000006b002f339ccfacb440000000000000008223cef5ec5565bc5000000000000000304f392c2c632b18a0000000000000007b51eb886a61e3c94",
                     clientMessage: hex"0a29f0918a856224e0a88f6d6973d1a8f090a2afe0b08e5a202ef09d849625f0918caff09daa9df09f95b4125c1dd2c31456a250e3aea2e3c44a76e2ea80e12c89443f7d8dbcabb86b681ab901db00a02de186433a9809fd3b10b5f6392aac009dff0b9124255ee463ea9649edba666e0dba1d9373c21ebf1e654dcc7ff08192fd7b8c12ce6b930071"
                 })
@@ -385,7 +385,7 @@ contract LCPCommitmentTest is BasicTest {
                             height: Height.Data({revision_number: 13821511815027613248, revision_height: 850669941820095721}),
                             stateId: hex"53d9511691f0d0d6a73eeec55aaf1a953d9a5ca1b2a5191f66c02c2116449cb2"
                         })
-                        ),
+                    ),
                     context: hex"0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000",
                     clientMessage: hex"0a275838272260f096a3a35c5c6f4127797b2326e18ab24125f090a886f0908a8ff09d9396f091a8be1205f5a73dc684"
                 })
@@ -398,7 +398,7 @@ contract LCPCommitmentTest is BasicTest {
                             height: Height.Data({revision_number: 11261054703887902424, revision_height: 3792602498306618923}),
                             stateId: hex"61826829caa438ca161204fb5f81b6e4c21243b253b4fc4bfe3e1d6a6ea05b24"
                         })
-                        ),
+                    ),
                     context: hex"0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000",
                     clientMessage: hex"0a11e0b48fc2a5e0b19de0b0b1217bf091b5a512106ca8f61681fe3b5af87ff0d94c6f3982"
                 })

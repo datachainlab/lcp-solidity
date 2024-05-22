@@ -1,5 +1,5 @@
 name: Test
-on: [push, pull_request]
+on: [pull_request]
 
 env:
   SOLC_VERSION: 0.8.20
