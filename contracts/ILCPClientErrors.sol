@@ -9,8 +9,11 @@ interface ILCPClientErrors {
     error LCPClientClientStateInvalidMrenclaveLength();
     error LCPClientClientStateUnexpectedMrenclave();
     error LCPClientClientStateEmptyOperators();
+    error LCPClientClientStateInvalidOperatorAddressLength();
     error LCPClientClientStateInvalidOperatorsNonce();
-    error LCPClientOperatorDuplicate(address operator, uint64 nonce);
+    error LCPClientClientStateUnexpectedOperatorsNonce(uint64 expectedNonce);
+
+    error LCPClientOperatorsInvalidOrder(address prevOperator, address nextOperator);
     error LCPClientClientStateInvalidOperatorsThreshold();
 
     error LCPClientConsensusStateInvalidTimestamp();
@@ -45,4 +48,9 @@ interface ILCPClientErrors {
 
     error LCPClientAVRInvalidSignature();
     error LCPClientAVRAlreadyExpired();
+
+    error LCPClientInvalidSignersLength();
+    error LCPClientInvalidSignaturesLength();
+
+    error LCPClientRegisterEnclaveKeyUnexpectedOperator(uint64 index, address actualOperator);
 }

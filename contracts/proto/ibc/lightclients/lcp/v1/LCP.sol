@@ -394,6 +394,7 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
     string report;
     bytes signature;
     bytes signing_cert;
+    uint64 operator_index;
     bytes operator_signature;
   }
 
@@ -452,6 +453,9 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
         pointer += _read_signing_cert(pointer, bs, r);
       } else
       if (fieldId == 4) {
+        pointer += _read_operator_index(pointer, bs, r);
+      } else
+      if (fieldId == 5) {
         pointer += _read_operator_signature(pointer, bs, r);
       } else
       {
@@ -512,6 +516,23 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
   ) internal pure returns (uint) {
     (bytes memory x, uint256 sz) = ProtoBufRuntime._decode_bytes(p, bs);
     r.signing_cert = x;
+    return sz;
+  }
+
+  /**
+   * @dev The decoder for reading a field
+   * @param p The offset of bytes array to start decode
+   * @param bs The bytes array to be decoded
+   * @param r The in-memory struct
+   * @return The number of bytes decoded
+   */
+  function _read_operator_index(
+    uint256 p,
+    bytes memory bs,
+    Data memory r
+  ) internal pure returns (uint) {
+    (uint64 x, uint256 sz) = ProtoBufRuntime._decode_uint64(p, bs);
+    r.operator_index = x;
     return sz;
   }
 
@@ -592,9 +613,18 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
     );
     pointer += ProtoBufRuntime._encode_bytes(r.signing_cert, pointer, bs);
     }
-    if (r.operator_signature.length != 0) {
+    if (r.operator_index != 0) {
     pointer += ProtoBufRuntime._encode_key(
       4,
+      ProtoBufRuntime.WireType.Varint,
+      pointer,
+      bs
+    );
+    pointer += ProtoBufRuntime._encode_uint64(r.operator_index, pointer, bs);
+    }
+    if (r.operator_signature.length != 0) {
+    pointer += ProtoBufRuntime._encode_key(
+      5,
       ProtoBufRuntime.WireType.LengthDelim,
       pointer,
       bs
@@ -647,6 +677,7 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
     e += 1 + ProtoBufRuntime._sz_lendelim(bytes(r.report).length);
     e += 1 + ProtoBufRuntime._sz_lendelim(r.signature.length);
     e += 1 + ProtoBufRuntime._sz_lendelim(r.signing_cert.length);
+    e += 1 + ProtoBufRuntime._sz_uint64(r.operator_index);
     e += 1 + ProtoBufRuntime._sz_lendelim(r.operator_signature.length);
     return e;
   }
@@ -668,6 +699,10 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
     return false;
   }
 
+  if (r.operator_index != 0) {
+    return false;
+  }
+
   if (r.operator_signature.length != 0) {
     return false;
   }
@@ -686,6 +721,7 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
     output.report = input.report;
     output.signature = input.signature;
     output.signing_cert = input.signing_cert;
+    output.operator_index = input.operator_index;
     output.operator_signature = input.operator_signature;
 
   }

@@ -74,6 +74,7 @@ abstract contract BaseLCPClientBenchmark is BasicTest {
         message.signature = readDecodedBytes(avrFile, ".signature");
         message.signing_cert = readDecodedBytes(avrFile, ".signing_cert");
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(testOperatorPrivKey, keccak256(bytes(message.report)));
+        message.operator_index = 0;
         message.operator_signature = abi.encodePacked(r, s, v);
     }
 

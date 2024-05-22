@@ -27,7 +27,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
 
     struct EKOperatorInfo {
         uint256 expiredAt;
-        address key;
+        address operator;
     }
 
     event RegisteredEnclaveKey(string clientId, address enclaveKey, uint256 expiredAt);
@@ -46,9 +46,6 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
 
     // clientId => enclave key => EKOperatorInfo
     mapping(string => mapping(address => EKOperatorInfo)) internal enclaveKeys;
-    // clientId => operator => nonce(revision)
-    mapping(string => mapping(address => uint256)) internal activeOperators;
-
     // clientId => quote status => flag(0: not allowed, 1: allowed)
     mapping(string => mapping(string => uint256)) internal allowedQuoteStatuses;
     // clientId => advisory id => flag(0: not allowed, 1: allowed)
@@ -123,14 +120,20 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
             revert LCPClientConsensusStateInvalidStateId();
         }
 
+        // ensure the operators are sorted(ascending order) and unique
+        address prev;
         for (uint256 i = 0; i < clientState.operators.length; i++) {
-            address operator = address(bytes20(clientState.operators[i]));
-            if (activeOperators[clientId][operator] == clientState.operators_nonce) {
-                revert LCPClientOperatorDuplicate(operator, clientState.operators_nonce);
+            if (clientState.operators[i].length != 20) {
+                revert LCPClientClientStateInvalidOperatorAddressLength();
             }
-            activeOperators[clientId][operator] = clientState.operators_nonce;
+            address addr = address(bytes20(clientState.operators[i]));
+            if (prev != address(0)) {
+                if (prev >= addr) {
+                    revert LCPClientOperatorsInvalidOrder(prev, addr);
+                }
+            }
+            prev = addr;
         }
-
         clientStates[clientId] = clientState;
 
         // set allowed quote status and advisories
@@ -226,7 +229,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
             LCPCommitment.CommitmentProof memory commitmentProof,
             LCPCommitment.VerifyMembershipProxyMessage memory message
         ) = LCPCommitment.parseVerifyMembershipCommitmentProof(proof);
-        verifyProxyMessage(clientId, message, height, prefix, path);
+        validateProxyMessage(clientId, message, height, prefix, path);
         if (keccak256(value) != message.value) {
             revert LCPClientMembershipVerificationInvalidValue();
         }
@@ -251,7 +254,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
             LCPCommitment.CommitmentProof memory commitmentProof,
             LCPCommitment.VerifyMembershipProxyMessage memory message
         ) = LCPCommitment.parseVerifyMembershipCommitmentProof(proof);
-        verifyProxyMessage(clientId, message, height, prefix, path);
+        validateProxyMessage(clientId, message, height, prefix, path);
         if (message.value != bytes32(0)) {
             revert LCPClientMembershipVerificationInvalidValue();
         }
@@ -259,7 +262,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         return true;
     }
 
-    function verifyProxyMessage(
+    function validateProxyMessage(
         string calldata clientId,
         LCPCommitment.VerifyMembershipProxyMessage memory message,
         Height.Data calldata height,
@@ -290,8 +293,12 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
     {
         ProtoClientState.Data storage clientState = clientStates[clientId];
         uint256 signerNum = commitmentProof.signers.length;
-        require(signerNum == commitmentProof.signatures.length);
-        require(signerNum == clientState.operators.length);
+        if (signerNum != clientState.operators.length) {
+            revert LCPClientInvalidSignersLength();
+        }
+        if (signerNum != commitmentProof.signatures.length) {
+            revert LCPClientInvalidSignaturesLength();
+        }
         bytes32 commitment = keccak256(commitmentProof.message);
         uint256 success = 0;
         for (uint256 i = 0; i < signerNum; i++) {
@@ -339,8 +346,12 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         returns (Height.Data[] memory heights)
     {
         ProtoClientState.Data storage clientState = clientStates[clientId];
-        require(message.signers.length == clientState.operators.length);
-        require(message.signers.length == message.signatures.length);
+        if (message.signers.length != clientState.operators.length) {
+            revert LCPClientInvalidSignersLength();
+        }
+        if (message.signers.length != message.signatures.length) {
+            revert LCPClientInvalidSignaturesLength();
+        }
         bytes32 commitment = keccak256(message.proxy_message);
         uint256 success = 0;
         for (uint256 i = 0; i < message.signers.length; i++) {
@@ -481,10 +492,14 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         }
 
         address operator = verifySignature(keccak256(abi.encodePacked(message.report)), message.operator_signature);
-        require(clientState.operators_nonce == activeOperators[clientId][operator]);
+        if (address(bytes20(clientState.operators[message.operator_index])) != operator) {
+            revert LCPClientRegisterEnclaveKeyUnexpectedOperator(
+                message.operator_index, address(bytes20(clientState.operators[message.operator_index]))
+            );
+        }
 
         if (enclaveKeys[clientId][enclaveKey].expiredAt != 0) {
-            if (enclaveKeys[clientId][enclaveKey].key != operator) {
+            if (enclaveKeys[clientId][enclaveKey].operator != operator) {
                 revert LCPClientEnclaveKeyUnexpectedOperator();
             }
             if (enclaveKeys[clientId][enclaveKey].expiredAt != expiredAt) {
@@ -494,7 +509,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
             return heights;
         }
 
-        enclaveKeys[clientId][enclaveKey].key = operator;
+        enclaveKeys[clientId][enclaveKey].operator = operator;
         enclaveKeys[clientId][enclaveKey].expiredAt = expiredAt;
         emit RegisteredEnclaveKey(clientId, enclaveKey, expiredAt);
 
@@ -507,11 +522,15 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         returns (Height.Data[] memory heights)
     {
         ProtoClientState.Data storage clientState = clientStates[clientId];
-        require(message.signatures.length == clientState.operators.length);
+        if (message.signatures.length != clientState.operators.length) {
+            revert LCPClientInvalidSignaturesLength();
+        }
         uint64 nonce = clientState.operators_nonce;
         uint64 nextNonce = nonce + 1;
-        bytes32 commitment =
-            computeUpdateOperatorsCommitment(clientId, nextNonce, computeOperatorsHash(message.new_operators));
+        if (message.nonce != nextNonce) {
+            revert LCPClientClientStateUnexpectedOperatorsNonce(nextNonce);
+        }
+        bytes32 commitment = computeUpdateOperatorsCommitment(clientId, nextNonce, message.new_operators);
         uint256 success = 0;
         for (uint256 i = 0; i < message.signatures.length; i++) {
             if (verifySignature(commitment, message.signatures[i], address(bytes20(clientState.operators[i])))) {
@@ -522,26 +541,38 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         }
         ensureSufficientValidSignatures(clientState, success);
         delete clientState.operators;
+        // ensure the new operators are sorted(ascending order) and unique
         for (uint256 i = 0; i < message.new_operators.length; i++) {
-            address opAddr = address(bytes20(message.new_operators[i]));
-            activeOperators[clientId][opAddr] = nextNonce;
+            if (message.new_operators[i].length != 20) {
+                revert LCPClientClientStateInvalidOperatorAddressLength();
+            }
+            if (i > 0) {
+                address prev = address(bytes20(message.new_operators[i - 1]));
+                if (prev >= address(bytes20(message.new_operators[i]))) {
+                    revert LCPClientOperatorsInvalidOrder(prev, address(bytes20(message.new_operators[i])));
+                }
+            }
             clientState.operators.push(message.new_operators[i]);
         }
         clientState.operators_nonce = nextNonce;
         return heights;
     }
 
-    function computeUpdateOperatorsCommitment(string memory clientId, uint256 nonce, bytes32 operatorsHash)
+    function computeUpdateOperatorsCommitment(string calldata clientId, uint64 nextNonce, bytes[] calldata newOperators)
         internal
         view
         returns (bytes32)
     {
         bytes32 envHash = keccak256(abi.encodePacked(uint16(1), uint16(1), block.chainid, address(this)));
-        return keccak256(abi.encodePacked(envHash, clientId, nonce, operatorsHash));
+        return keccak256(abi.encodePacked(envHash, clientId, computeOperatorsHash(nextNonce, newOperators)));
     }
 
-    function computeOperatorsHash(bytes[] calldata _validators) internal pure returns (bytes32) {
-        return keccak256(abi.encode(_validators));
+    function computeOperatorsHash(uint64 operatorsNonce, bytes[] calldata _validators)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(operatorsNonce, _validators));
     }
 
     function ensureActiveKey(string calldata clientId, address ekAddr, address opAddr) internal view {
@@ -552,7 +583,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         if (expiredAt <= block.timestamp) {
             revert LCPClientEnclaveKeyExpired();
         }
-        if (enclaveKeys[clientId][ekAddr].key != opAddr) {
+        if (enclaveKeys[clientId][ekAddr].operator != opAddr) {
             revert LCPClientEnclaveKeyUnexpectedOperator();
         }
     }
