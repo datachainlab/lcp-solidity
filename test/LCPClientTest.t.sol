@@ -16,6 +16,7 @@ import "../contracts/LCPCommitment.sol";
 import "../contracts/LCPUtils.sol";
 import {LCPProtoMarshaler} from "../contracts/LCPProtoMarshaler.sol";
 import "./TestHelper.t.sol";
+import {LCPOperator} from "../contracts/LCPOperator.sol";
 
 contract LCPClientTest is BasicTest {
     using BytesUtils for bytes;
@@ -57,10 +58,6 @@ contract LCPClientTest is BasicTest {
         simulationLC = new LCPClient(address(this), true, vm.readFileBinary("./test/data/certs/simulation_rootca.der"));
     }
 
-    function generateClientId(uint64 clientCounter) internal pure returns (string memory) {
-        return string(abi.encodePacked("lcp-", Strings.toString(clientCounter)));
-    }
-
     function testIASClient() public {
         vm.warp(1703238378);
         setTestContext(TestContext("01", iasLC));
@@ -79,7 +76,7 @@ contract LCPClientTest is BasicTest {
         string memory clientId = generateClientId(1);
         LCPClient lc = testContext.lc;
         {
-            ClientState.Data memory clientState = createInitialState(commandAvrFile, testOperator);
+            ClientState.Data memory clientState = createInitialState(commandAvrFile);
             ConsensusState.Data memory consensusState;
             Height.Data memory height = lc.initializeClient(
                 clientId, LCPProtoMarshaler.marshal(clientState), LCPProtoMarshaler.marshal(consensusState)
@@ -88,7 +85,7 @@ contract LCPClientTest is BasicTest {
         }
 
         {
-            RegisterEnclaveKeyMessage.Data memory message = createRegisterEnclaveKeyMessage(commandAvrFile);
+            RegisterEnclaveKeyMessage.Data memory message = createRegisterEnclaveKeyMessage(clientId, commandAvrFile);
             vm.expectEmit(false, false, false, false);
             emit RegisteredEnclaveKey(clientId, address(0), 0);
             Height.Data[] memory heights = lc.registerEnclaveKey(clientId, message);
@@ -96,7 +93,7 @@ contract LCPClientTest is BasicTest {
         }
 
         {
-            RegisterEnclaveKeyMessage.Data memory message = createRegisterEnclaveKeyMessage(commandAvrFile);
+            RegisterEnclaveKeyMessage.Data memory message = createRegisterEnclaveKeyMessage(clientId, commandAvrFile);
             // the following staticcall is expected to succeed because registerEnclaveKey does not update the state if the message contains an enclave key already registered
             (bool success,) = address(lc).staticcall(
                 abi.encodeWithSelector(LCPClientBase.registerEnclaveKey.selector, clientId, message)
@@ -141,10 +138,18 @@ contract LCPClientTest is BasicTest {
         }
     }
 
-    function createInitialState(string memory avrFile, address operator)
-        internal
-        returns (ClientState.Data memory clientState)
-    {
+    function createInitialState(string memory avrFile) internal returns (ClientState.Data memory clientState) {
+        address[] memory operators = new address[](1);
+        operators[0] = testOperator;
+        return createInitialState(avrFile, operators, 1, 1);
+    }
+
+    function createInitialState(
+        string memory avrFile,
+        address[] memory operators,
+        uint64 thresholdNumerator,
+        uint64 thresholdDenominator
+    ) internal returns (ClientState.Data memory clientState) {
         bytes memory mrenclave = readDecodedBytes(avrFile, ".mrenclave");
         require(mrenclave.length == 32, "the length must be 32");
 
@@ -153,11 +158,13 @@ contract LCPClientTest is BasicTest {
         clientState.key_expiration = 60 * 60 * 24 * 7;
         clientState.frozen = false;
 
-        clientState.operators = new bytes[](1);
-        clientState.operators[0] = abi.encodePacked(operator);
+        clientState.operators = new bytes[](operators.length);
+        for (uint256 i = 0; i < operators.length; i++) {
+            clientState.operators[i] = abi.encodePacked(operators[i]);
+        }
         clientState.operators_nonce = 1;
-        clientState.operators_threshold_numerator = 1;
-        clientState.operators_threshold_denominator = 1;
+        clientState.operators_threshold_numerator = thresholdNumerator;
+        clientState.operators_threshold_denominator = thresholdDenominator;
 
         // WARNING: the following configuration is for testing purpose only
         clientState.allowed_quote_statuses = new string[](1);
@@ -165,15 +172,31 @@ contract LCPClientTest is BasicTest {
         clientState.allowed_advisory_ids = readNestedStringArray(avrFile, ".avr", ".advisoryIDs");
     }
 
-    function createRegisterEnclaveKeyMessage(string memory avrFile)
+    function createRegisterEnclaveKeyMessage(string memory clientId, string memory avrFile)
         internal
         returns (RegisterEnclaveKeyMessage.Data memory message)
     {
+        return createRegisterEnclaveKeyMessage(clientId, avrFile, 0, testOperatorPrivKey);
+    }
+
+    function createRegisterEnclaveKeyMessage(
+        string memory clientId,
+        string memory avrFile,
+        uint256 operatorIndex,
+        uint256 operatorPrivKey
+    ) internal returns (RegisterEnclaveKeyMessage.Data memory message) {
         message.report = string(readJSON(avrFile, ".avr"));
         message.signature = readDecodedBytes(avrFile, ".signature");
         message.signing_cert = readDecodedBytes(avrFile, ".signing_cert");
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(testOperatorPrivKey, keccak256(bytes(message.report)));
-        message.operator_index = 0;
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            operatorPrivKey,
+            keccak256(
+                LCPOperatorTestHelper.computeEIP712RegisterEnclaveKey(
+                    block.chainid, address(testContext.lc), clientId, message.report
+                )
+            )
+        );
+        message.operator_index = uint64(operatorIndex);
         message.operator_signature = abi.encodePacked(r, s, v);
     }
 

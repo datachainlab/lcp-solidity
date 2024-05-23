@@ -3,9 +3,11 @@ pragma solidity ^0.8.12;
 
 import "forge-std/Test.sol";
 import "forge-std/StdJson.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 import "../contracts/AVRValidator.sol";
 import "../contracts/LCPUtils.sol";
 import "../contracts/LCPCommitment.sol";
+import "../contracts/LCPOperator.sol";
 
 abstract contract BasicTest is Test {
     using stdJson for string;
@@ -55,6 +57,29 @@ abstract contract BasicTest is Test {
         commitmentProof.signatures = new bytes[](1);
         commitmentProof.signatures[0] = signature;
         return commitmentProof;
+    }
+
+    function createWallets(uint256 count) internal returns (Vm.Wallet[] memory) {
+        Vm.Wallet[] memory wallets = new Vm.Wallet[](count);
+        for (uint256 i = 0; i < count; i++) {
+            wallets[i] = vm.createWallet(string(abi.encodePacked("wallet-", Strings.toString(i))));
+        }
+        sort(wallets);
+        return wallets;
+    }
+
+    function sort(Vm.Wallet[] memory wallets) internal pure {
+        for (uint256 i = 0; i < wallets.length; i++) {
+            for (uint256 j = i + 1; j < wallets.length; j++) {
+                if (wallets[i].addr > wallets[j].addr) {
+                    (wallets[i], wallets[j]) = (wallets[j], wallets[i]);
+                }
+            }
+        }
+    }
+
+    function generateClientId(uint64 clientCounter) internal pure returns (string memory) {
+        return string(abi.encodePacked("lcp-", Strings.toString(clientCounter)));
     }
 }
 
@@ -108,5 +133,26 @@ library LCPCommitmentTestHelper {
         returns (LCPCommitment.MisbehaviourProxyMessage memory)
     {
         return LCPCommitment.parseMisbehaviourProxyMessage(messageBytes);
+    }
+}
+
+library LCPOperatorTestHelper {
+    function computeEIP712UpdateOperators(
+        uint256 chainId,
+        address verifyingContract,
+        string calldata clientId,
+        uint64 nonce,
+        address[] memory newOperators
+    ) public pure returns (bytes memory) {
+        return LCPOperator.computeEIP712UpdateOperators(chainId, verifyingContract, clientId, nonce, newOperators);
+    }
+
+    function computeEIP712RegisterEnclaveKey(
+        uint256 chainId,
+        address verifyingContract,
+        string calldata clientId,
+        string memory avr
+    ) public pure returns (bytes memory) {
+        return LCPOperator.computeEIP712RegisterEnclaveKey(chainId, verifyingContract, clientId, avr);
     }
 }

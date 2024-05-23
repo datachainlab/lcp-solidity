@@ -12,6 +12,7 @@ import {
 } from "../contracts/proto/ibc/lightclients/lcp/v1/LCP.sol";
 import {LCPProtoMarshaler} from "../contracts/LCPProtoMarshaler.sol";
 import {IBCHeight} from "@hyperledger-labs/yui-ibc-solidity/contracts/core/02-client/IBCHeight.sol";
+import {LCPOperator} from "../contracts/LCPOperator.sol";
 
 abstract contract BaseLCPClientBenchmark is BasicTest {
     string internal constant commandAvrFile = "test/data/client/02/001-avr";
@@ -36,10 +37,6 @@ abstract contract BaseLCPClientBenchmark is BasicTest {
         ClientState.Data memory clientState = createInitialState(commandAvrFile, testOperator);
         ConsensusState.Data memory consensusState;
         lc.initializeClient(clientId, LCPProtoMarshaler.marshal(clientState), LCPProtoMarshaler.marshal(consensusState));
-    }
-
-    function generateClientId(uint64 clientCounter) internal pure returns (string memory) {
-        return string(abi.encodePacked("lcp-", Strings.toString(clientCounter)));
     }
 
     function createInitialState(string memory avrFile, address operator)
@@ -73,8 +70,15 @@ abstract contract BaseLCPClientBenchmark is BasicTest {
         message.report = string(readJSON(avrFile, ".avr"));
         message.signature = readDecodedBytes(avrFile, ".signature");
         message.signing_cert = readDecodedBytes(avrFile, ".signing_cert");
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(testOperatorPrivKey, keccak256(bytes(message.report)));
         message.operator_index = 0;
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            testOperatorPrivKey,
+            keccak256(
+                LCPOperatorTestHelper.computeEIP712RegisterEnclaveKey(
+                    block.chainid, address(lc), clientId, message.report
+                )
+            )
+        );
         message.operator_signature = abi.encodePacked(r, s, v);
     }
 

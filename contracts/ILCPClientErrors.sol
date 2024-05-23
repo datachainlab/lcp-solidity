@@ -38,7 +38,7 @@ interface ILCPClientErrors {
 
     error LCPClientEnclaveKeyNotExist();
     error LCPClientEnclaveKeyExpired();
-    error LCPClientEnclaveKeyUnexpectedOperator();
+    error LCPClientEnclaveKeyUnexpectedOperator(address expected, address actual);
     error LCPClientEnclaveKeyUnexpectedExpiredAt();
 
     error LCPClientOperatorSignaturesInsufficient(uint256 success);
@@ -52,5 +52,5 @@ interface ILCPClientErrors {
     error LCPClientInvalidSignersLength();
     error LCPClientInvalidSignaturesLength();
 
-    error LCPClientRegisterEnclaveKeyUnexpectedOperator(uint64 index, address actualOperator);
+    error LCPClientRegisterEnclaveKeyUnexpectedOperator(uint64 index, address gotOperator, address actualOperator);
 }
