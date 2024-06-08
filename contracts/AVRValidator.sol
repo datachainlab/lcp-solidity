@@ -261,6 +261,7 @@ library AVRValidator {
      * }
      *
      * @return address of EnclaveKey
+     * @return address of Operator
      * @return timestamp when report was attested
      * @return mrenclave of the attested enclave
      */
@@ -269,7 +270,7 @@ library AVRValidator {
         bytes calldata report,
         mapping(string => uint256) storage allowedQuoteStatuses,
         mapping(string => uint256) storage allowedAdvisories
-    ) public view returns (address, uint256, bytes32) {
+    ) public view returns (address, address, uint256, bytes32) {
         // find 'timestamp' key
         (uint256 i, bytes memory timestamp) = consumeTimestampReportJSON(report, 0);
         uint256 checkpoint;
@@ -290,7 +291,8 @@ library AVRValidator {
                     || h == HASHED_CONFIGURATION_AND_SW_HARDENING_NEEDED
             ) {
                 // find 'advisoryIDs' key and validate them
-                validateAdvisories(report, consumeAdvisoryIdsReportJSON(report, checkpoint), allowedAdvisories);
+                checkpoint = consumeAdvisoryIdsReportJSON(report, checkpoint);
+                validateAdvisories(report, checkpoint, allowedAdvisories);
             }
         }
 
@@ -315,9 +317,11 @@ library AVRValidator {
         } else {
             require(attributesFlags & uint8(2) == uint8(0), "disallowed debug enclave");
         }
-
+        // report data layout
+        // |enclave public key: 20|operator: 20|reserved: 24
         return (
             address(quoteDecoded.readBytes20(368)),
+            address(quoteDecoded.readBytes20(388)),
             LCPUtils.attestationTimestampToSeconds(timestamp),
             quoteDecoded.readBytes32(112)
         );

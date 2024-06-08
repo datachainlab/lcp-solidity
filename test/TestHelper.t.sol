@@ -44,19 +44,16 @@ abstract contract BasicTest is Test {
         return data.readStringArray(secondFilter);
     }
 
-    function newCommitmentProof(bytes memory message, bytes memory signer, bytes memory signature)
+    function newCommitmentProofs(bytes memory message, bytes memory signature)
         internal
         pure
-        returns (LCPCommitment.CommitmentProof memory)
+        returns (LCPCommitment.CommitmentProofs memory)
     {
-        require(signer.length == 20, "invalid signer length");
-        LCPCommitment.CommitmentProof memory commitmentProof;
-        commitmentProof.message = message;
-        commitmentProof.signers = new address[](1);
-        commitmentProof.signers[0] = address(bytes20(signer));
-        commitmentProof.signatures = new bytes[](1);
-        commitmentProof.signatures[0] = signature;
-        return commitmentProof;
+        LCPCommitment.CommitmentProofs memory commitmentProofs;
+        commitmentProofs.message = message;
+        commitmentProofs.signatures = new bytes[](1);
+        commitmentProofs.signatures[0] = signature;
+        return commitmentProofs;
     }
 
     function createWallets(uint256 count) internal returns (Vm.Wallet[] memory) {
@@ -119,12 +116,12 @@ library LCPCommitmentTestHelper {
         return LCPCommitment.parseUpdateStateProxyMessage(commitmentBytes);
     }
 
-    function parseVerifyMembershipCommitmentProof(bytes calldata proofBytes)
+    function parseVerifyMembershipCommitmentProofs(bytes calldata proofBytes)
         public
         pure
-        returns (LCPCommitment.CommitmentProof memory, LCPCommitment.VerifyMembershipProxyMessage memory)
+        returns (LCPCommitment.CommitmentProofs memory, LCPCommitment.VerifyMembershipProxyMessage memory)
     {
-        return LCPCommitment.parseVerifyMembershipCommitmentProof(proofBytes);
+        return LCPCommitment.parseVerifyMembershipCommitmentProofs(proofBytes);
     }
 
     function parseMisbehaviourProxyMessage(bytes calldata messageBytes)
@@ -147,12 +144,7 @@ library LCPOperatorTestHelper {
         return LCPOperator.computeEIP712UpdateOperators(chainId, verifyingContract, clientId, nonce, newOperators);
     }
 
-    function computeEIP712RegisterEnclaveKey(
-        uint256 chainId,
-        address verifyingContract,
-        string calldata clientId,
-        string memory avr
-    ) public pure returns (bytes memory) {
-        return LCPOperator.computeEIP712RegisterEnclaveKey(chainId, verifyingContract, clientId, avr);
+    function computeEIP712RegisterEnclaveKey(string memory avr) public pure returns (bytes memory) {
+        return LCPOperator.computeEIP712RegisterEnclaveKey(avr);
     }
 }

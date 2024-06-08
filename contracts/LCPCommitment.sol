@@ -157,9 +157,8 @@ library LCPCommitment {
         return;
     }
 
-    struct CommitmentProof {
+    struct CommitmentProofs {
         bytes message;
-        address[] signers;
         bytes[] signatures;
     }
 
@@ -187,12 +186,12 @@ library LCPCommitment {
         return abi.decode(hm.message, (VerifyMembershipProxyMessage));
     }
 
-    function parseVerifyMembershipCommitmentProof(bytes calldata commitmentProofBytes)
+    function parseVerifyMembershipCommitmentProofs(bytes calldata commitmentProofsBytes)
         internal
         pure
-        returns (CommitmentProof memory, VerifyMembershipProxyMessage memory)
+        returns (CommitmentProofs memory, VerifyMembershipProxyMessage memory)
     {
-        CommitmentProof memory commitmentProof = abi.decode(commitmentProofBytes, (CommitmentProof));
-        return (commitmentProof, parseVerifyMembershipProxyMessage(commitmentProof.message));
+        CommitmentProofs memory commitmentProofs = abi.decode(commitmentProofsBytes, (CommitmentProofs));
+        return (commitmentProofs, parseVerifyMembershipProxyMessage(commitmentProofs.message));
     }
 }

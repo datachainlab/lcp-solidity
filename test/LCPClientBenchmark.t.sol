@@ -53,7 +53,7 @@ abstract contract BaseLCPClientBenchmark is BasicTest {
 
         clientState.operators = new bytes[](1);
         clientState.operators[0] = abi.encodePacked(operator);
-        clientState.operators_nonce = 1;
+        clientState.operators_nonce = 0;
         clientState.operators_threshold_numerator = 1;
         clientState.operators_threshold_denominator = 1;
 
@@ -70,14 +70,8 @@ abstract contract BaseLCPClientBenchmark is BasicTest {
         message.report = string(readJSON(avrFile, ".avr"));
         message.signature = readDecodedBytes(avrFile, ".signature");
         message.signing_cert = readDecodedBytes(avrFile, ".signing_cert");
-        message.operator_index = 0;
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-            testOperatorPrivKey,
-            keccak256(
-                LCPOperatorTestHelper.computeEIP712RegisterEnclaveKey(
-                    block.chainid, address(lc), clientId, message.report
-                )
-            )
+            testOperatorPrivKey, keccak256(LCPOperatorTestHelper.computeEIP712RegisterEnclaveKey(message.report))
         );
         message.operator_signature = abi.encodePacked(r, s, v);
     }
@@ -88,9 +82,6 @@ abstract contract BaseLCPClientBenchmark is BasicTest {
     {
         message.proxy_message =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".message");
-        message.signers = new bytes[](1);
-        message.signers[0] =
-            readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".signer");
         message.signatures = new bytes[](1);
         message.signatures[0] =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".signature");

@@ -16,14 +16,10 @@ import "../contracts/LCPCommitment.sol";
 import "../contracts/LCPUtils.sol";
 import {LCPProtoMarshaler} from "../contracts/LCPProtoMarshaler.sol";
 import "./TestHelper.t.sol";
-import {LCPOperator} from "../contracts/LCPOperator.sol";
 
 contract LCPClientTest is BasicTest {
     using BytesUtils for bytes;
     using IBCHeight for Height.Data;
-
-    uint256 internal immutable testOperatorPrivKey;
-    address internal immutable testOperator;
 
     TestContext testContext;
     LCPClient iasLC;
@@ -40,10 +36,7 @@ contract LCPClientTest is BasicTest {
     struct TestContext {
         string dir;
         LCPClient lc;
-    }
-
-    constructor() {
-        (testOperator, testOperatorPrivKey) = makeAddrAndKey("alice");
+        Vm.Wallet opWallet;
     }
 
     function setTestContext(TestContext memory tc) internal {
@@ -58,42 +51,62 @@ contract LCPClientTest is BasicTest {
         simulationLC = new LCPClient(address(this), true, vm.readFileBinary("./test/data/certs/simulation_rootca.der"));
     }
 
-    function testIASClient() public {
+    function testIASClientPermissioned() public {
         vm.warp(1703238378);
-        setTestContext(TestContext("01", iasLC));
-        testClient();
+        setTestContext(TestContext("01", iasLC, vm.createWallet("alice")));
+        testLightClient(generateClientId(1), true);
     }
 
-    function testSimulationClient() public {
+    function testIASClientPermissionless() public {
+        vm.warp(1703238378);
+        setTestContext(TestContext("01", iasLC, vm.createWallet("alice")));
+        testLightClient(generateClientId(1), false);
+    }
+
+    function testSimulationClientPermissioned() public {
         vm.warp(1703138378);
-        setTestContext(TestContext("02", simulationLC));
-        testClient();
+        setTestContext(TestContext("02", simulationLC, vm.createWallet("alice")));
+        testLightClient(generateClientId(1), true);
     }
 
-    event RegisteredEnclaveKey(string clientId, address enclaveKey, uint256 expiredAt);
+    function testSimulationClientPermissionless() public {
+        vm.warp(1703138378);
+        setTestContext(TestContext("02", simulationLC, vm.createWallet("alice")));
+        testLightClient(generateClientId(1), false);
+    }
 
-    function testClient() internal {
-        string memory clientId = generateClientId(1);
+    event RegisteredEnclaveKey(string clientId, address enclaveKey, uint256 expiredAt, address operator);
+
+    function testLightClient(string memory clientId, bool permissioned) internal {
         LCPClient lc = testContext.lc;
         {
-            ClientState.Data memory clientState = createInitialState(commandAvrFile);
+            ClientState.Data memory clientState;
+            address[] memory opWallets;
+            if (permissioned) {
+                opWallets = new address[](1);
+                opWallets[0] = testContext.opWallet.addr;
+                clientState = createInitialState(commandAvrFile, opWallets);
+            } else {
+                clientState = createInitialState(commandAvrFile, opWallets, 0, 0);
+            }
             ConsensusState.Data memory consensusState;
             Height.Data memory height = lc.initializeClient(
                 clientId, LCPProtoMarshaler.marshal(clientState), LCPProtoMarshaler.marshal(consensusState)
             );
             require(height.eq(clientState.latest_height));
         }
-
         {
-            RegisterEnclaveKeyMessage.Data memory message = createRegisterEnclaveKeyMessage(clientId, commandAvrFile);
+            RegisterEnclaveKeyMessage.Data memory message =
+                createRegisterEnclaveKeyMessage(commandAvrFile, testContext.opWallet);
             vm.expectEmit(false, false, false, false);
-            emit RegisteredEnclaveKey(clientId, address(0), 0);
+            emit RegisteredEnclaveKey(clientId, address(0), 0, address(0));
             Height.Data[] memory heights = lc.registerEnclaveKey(clientId, message);
             require(heights.length == 0);
         }
 
         {
-            RegisterEnclaveKeyMessage.Data memory message = createRegisterEnclaveKeyMessage(clientId, commandAvrFile);
+            RegisterEnclaveKeyMessage.Data memory message =
+                createRegisterEnclaveKeyMessage(commandAvrFile, testContext.opWallet);
             // the following staticcall is expected to succeed because registerEnclaveKey does not update the state if the message contains an enclave key already registered
             (bool success,) = address(lc).staticcall(
                 abi.encodeWithSelector(LCPClientBase.registerEnclaveKey.selector, clientId, message)
@@ -138,9 +151,10 @@ contract LCPClientTest is BasicTest {
         }
     }
 
-    function createInitialState(string memory avrFile) internal returns (ClientState.Data memory clientState) {
-        address[] memory operators = new address[](1);
-        operators[0] = testOperator;
+    function createInitialState(string memory avrFile, address[] memory operators)
+        internal
+        returns (ClientState.Data memory clientState)
+    {
         return createInitialState(avrFile, operators, 1, 1);
     }
 
@@ -162,7 +176,7 @@ contract LCPClientTest is BasicTest {
         for (uint256 i = 0; i < operators.length; i++) {
             clientState.operators[i] = abi.encodePacked(operators[i]);
         }
-        clientState.operators_nonce = 1;
+        clientState.operators_nonce = 0;
         clientState.operators_threshold_numerator = thresholdNumerator;
         clientState.operators_threshold_denominator = thresholdDenominator;
 
@@ -172,31 +186,16 @@ contract LCPClientTest is BasicTest {
         clientState.allowed_advisory_ids = readNestedStringArray(avrFile, ".avr", ".advisoryIDs");
     }
 
-    function createRegisterEnclaveKeyMessage(string memory clientId, string memory avrFile)
+    function createRegisterEnclaveKeyMessage(string memory avrFile, Vm.Wallet memory opWallet)
         internal
         returns (RegisterEnclaveKeyMessage.Data memory message)
     {
-        return createRegisterEnclaveKeyMessage(clientId, avrFile, 0, testOperatorPrivKey);
-    }
-
-    function createRegisterEnclaveKeyMessage(
-        string memory clientId,
-        string memory avrFile,
-        uint256 operatorIndex,
-        uint256 operatorPrivKey
-    ) internal returns (RegisterEnclaveKeyMessage.Data memory message) {
         message.report = string(readJSON(avrFile, ".avr"));
         message.signature = readDecodedBytes(avrFile, ".signature");
         message.signing_cert = readDecodedBytes(avrFile, ".signing_cert");
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-            operatorPrivKey,
-            keccak256(
-                LCPOperatorTestHelper.computeEIP712RegisterEnclaveKey(
-                    block.chainid, address(testContext.lc), clientId, message.report
-                )
-            )
+            opWallet.privateKey, keccak256(LCPOperatorTestHelper.computeEIP712RegisterEnclaveKey(message.report))
         );
-        message.operator_index = uint64(operatorIndex);
         message.operator_signature = abi.encodePacked(r, s, v);
     }
 
@@ -206,9 +205,6 @@ contract LCPClientTest is BasicTest {
     {
         message.proxy_message =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".message");
-        message.signers = new bytes[](1);
-        message.signers[0] =
-            readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".signer");
         message.signatures = new bytes[](1);
         message.signatures[0] =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".signature");
@@ -228,16 +224,13 @@ contract LCPClientTest is BasicTest {
         {
             bytes memory messageBytes =
                 readDecodedBytes(string(abi.encodePacked(verifyMembershipFilePrefix, commandResultSuffix)), ".message");
-            bytes memory signer =
-                readDecodedBytes(string(abi.encodePacked(verifyMembershipFilePrefix, commandResultSuffix)), ".signer");
-            require(signer.length == 20, "signer length must be 20");
             bytes memory signature = readDecodedBytes(
                 string(abi.encodePacked(verifyMembershipFilePrefix, commandResultSuffix)), ".signature"
             );
-            proof = abi.encode(newCommitmentProof(messageBytes, signer, signature));
+            proof = abi.encode(newCommitmentProofs(messageBytes, signature));
         }
         (, LCPCommitment.VerifyMembershipProxyMessage memory message) =
-            LCPCommitmentTestHelper.parseVerifyMembershipCommitmentProof(proof);
+            LCPCommitmentTestHelper.parseVerifyMembershipCommitmentProofs(proof);
         assert(message.value == keccak256(value));
 
         height = message.height;
@@ -251,14 +244,11 @@ contract LCPClientTest is BasicTest {
     {
         bytes memory messageBytes =
             readDecodedBytes(string(abi.encodePacked(verifyNonMembershipFilePrefix, commandResultSuffix)), ".message");
-        bytes memory signer =
-            readDecodedBytes(string(abi.encodePacked(verifyNonMembershipFilePrefix, commandResultSuffix)), ".signer");
-        require(signer.length == 20, "signer length must be 20");
         bytes memory signature =
             readDecodedBytes(string(abi.encodePacked(verifyNonMembershipFilePrefix, commandResultSuffix)), ".signature");
-        proof = abi.encode(newCommitmentProof(messageBytes, signer, signature));
+        proof = abi.encode(newCommitmentProofs(messageBytes, signature));
         (, LCPCommitment.VerifyMembershipProxyMessage memory message) =
-            LCPCommitmentTestHelper.parseVerifyMembershipCommitmentProof(proof);
+            LCPCommitmentTestHelper.parseVerifyMembershipCommitmentProofs(proof);
         assert(message.value == bytes32(0));
 
         height = message.height;

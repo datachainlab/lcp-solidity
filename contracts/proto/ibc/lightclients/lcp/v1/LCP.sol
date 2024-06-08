@@ -10,7 +10,6 @@ library IbcLightclientsLcpV1UpdateClientMessage {
   //struct definition
   struct Data {
     bytes proxy_message;
-    bytes[] signers;
     bytes[] signatures;
   }
 
@@ -51,7 +50,7 @@ library IbcLightclientsLcpV1UpdateClientMessage {
     returns (Data memory, uint)
   {
     Data memory r;
-    uint[4] memory counters;
+    uint[3] memory counters;
     uint256 fieldId;
     ProtoBufRuntime.WireType wireType;
     uint256 bytesRead;
@@ -64,9 +63,6 @@ library IbcLightclientsLcpV1UpdateClientMessage {
         pointer += _read_proxy_message(pointer, bs, r);
       } else
       if (fieldId == 2) {
-        pointer += _read_unpacked_repeated_signers(pointer, bs, nil(), counters);
-      } else
-      if (fieldId == 3) {
         pointer += _read_unpacked_repeated_signatures(pointer, bs, nil(), counters);
       } else
       {
@@ -76,21 +72,14 @@ library IbcLightclientsLcpV1UpdateClientMessage {
     }
     pointer = offset;
     if (counters[2] > 0) {
-      require(r.signers.length == 0);
-      r.signers = new bytes[](counters[2]);
-    }
-    if (counters[3] > 0) {
       require(r.signatures.length == 0);
-      r.signatures = new bytes[](counters[3]);
+      r.signatures = new bytes[](counters[2]);
     }
 
     while (pointer < offset + sz) {
       (fieldId, wireType, bytesRead) = ProtoBufRuntime._decode_key(pointer, bs);
       pointer += bytesRead;
       if (fieldId == 2) {
-        pointer += _read_unpacked_repeated_signers(pointer, bs, r, counters);
-      } else
-      if (fieldId == 3) {
         pointer += _read_unpacked_repeated_signatures(pointer, bs, r, counters);
       } else
       {
@@ -127,11 +116,11 @@ library IbcLightclientsLcpV1UpdateClientMessage {
    * @param counters The counters for repeated fields
    * @return The number of bytes decoded
    */
-  function _read_unpacked_repeated_signers(
+  function _read_unpacked_repeated_signatures(
     uint256 p,
     bytes memory bs,
     Data memory r,
-    uint[4] memory counters
+    uint[3] memory counters
   ) internal pure returns (uint) {
     /**
      * if `r` is NULL, then only counting the number of fields.
@@ -140,35 +129,8 @@ library IbcLightclientsLcpV1UpdateClientMessage {
     if (isNil(r)) {
       counters[2] += 1;
     } else {
-      r.signers[r.signers.length - counters[2]] = x;
+      r.signatures[r.signatures.length - counters[2]] = x;
       counters[2] -= 1;
-    }
-    return sz;
-  }
-
-  /**
-   * @dev The decoder for reading a field
-   * @param p The offset of bytes array to start decode
-   * @param bs The bytes array to be decoded
-   * @param r The in-memory struct
-   * @param counters The counters for repeated fields
-   * @return The number of bytes decoded
-   */
-  function _read_unpacked_repeated_signatures(
-    uint256 p,
-    bytes memory bs,
-    Data memory r,
-    uint[4] memory counters
-  ) internal pure returns (uint) {
-    /**
-     * if `r` is NULL, then only counting the number of fields.
-     */
-    (bytes memory x, uint256 sz) = ProtoBufRuntime._decode_bytes(p, bs);
-    if (isNil(r)) {
-      counters[3] += 1;
-    } else {
-      r.signatures[r.signatures.length - counters[3]] = x;
-      counters[3] -= 1;
     }
     return sz;
   }
@@ -215,21 +177,10 @@ library IbcLightclientsLcpV1UpdateClientMessage {
     );
     pointer += ProtoBufRuntime._encode_bytes(r.proxy_message, pointer, bs);
     }
-    if (r.signers.length != 0) {
-    for(i = 0; i < r.signers.length; i++) {
-      pointer += ProtoBufRuntime._encode_key(
-        2,
-        ProtoBufRuntime.WireType.LengthDelim,
-        pointer,
-        bs)
-      ;
-      pointer += ProtoBufRuntime._encode_bytes(r.signers[i], pointer, bs);
-    }
-    }
     if (r.signatures.length != 0) {
     for(i = 0; i < r.signatures.length; i++) {
       pointer += ProtoBufRuntime._encode_key(
-        3,
+        2,
         ProtoBufRuntime.WireType.LengthDelim,
         pointer,
         bs)
@@ -281,9 +232,6 @@ library IbcLightclientsLcpV1UpdateClientMessage {
   ) internal pure returns (uint) {
     uint256 e;uint256 i;
     e += 1 + ProtoBufRuntime._sz_lendelim(r.proxy_message.length);
-    for(i = 0; i < r.signers.length; i++) {
-      e += 1 + ProtoBufRuntime._sz_lendelim(r.signers[i].length);
-    }
     for(i = 0; i < r.signatures.length; i++) {
       e += 1 + ProtoBufRuntime._sz_lendelim(r.signatures[i].length);
     }
@@ -296,10 +244,6 @@ library IbcLightclientsLcpV1UpdateClientMessage {
   ) internal pure returns (bool) {
     
   if (r.proxy_message.length != 0) {
-    return false;
-  }
-
-  if (r.signers.length != 0) {
     return false;
   }
 
@@ -319,29 +263,10 @@ library IbcLightclientsLcpV1UpdateClientMessage {
    */
   function store(Data memory input, Data storage output) internal {
     output.proxy_message = input.proxy_message;
-    output.signers = input.signers;
     output.signatures = input.signatures;
 
   }
 
-
-  //array helpers for Signers
-  /**
-   * @dev Add value to an array
-   * @param self The in-memory struct
-   * @param value The value to add
-   */
-  function addSigners(Data memory self, bytes memory value) internal pure {
-    /**
-     * First resize the array. Then add the new element to the end.
-     */
-    bytes[] memory tmp = new bytes[](self.signers.length + 1);
-    for (uint256 i = 0; i < self.signers.length; i++) {
-      tmp[i] = self.signers[i];
-    }
-    tmp[self.signers.length] = value;
-    self.signers = tmp;
-  }
 
   //array helpers for Signatures
   /**
@@ -394,7 +319,6 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
     string report;
     bytes signature;
     bytes signing_cert;
-    uint64 operator_index;
     bytes operator_signature;
   }
 
@@ -453,9 +377,6 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
         pointer += _read_signing_cert(pointer, bs, r);
       } else
       if (fieldId == 4) {
-        pointer += _read_operator_index(pointer, bs, r);
-      } else
-      if (fieldId == 5) {
         pointer += _read_operator_signature(pointer, bs, r);
       } else
       {
@@ -516,23 +437,6 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
   ) internal pure returns (uint) {
     (bytes memory x, uint256 sz) = ProtoBufRuntime._decode_bytes(p, bs);
     r.signing_cert = x;
-    return sz;
-  }
-
-  /**
-   * @dev The decoder for reading a field
-   * @param p The offset of bytes array to start decode
-   * @param bs The bytes array to be decoded
-   * @param r The in-memory struct
-   * @return The number of bytes decoded
-   */
-  function _read_operator_index(
-    uint256 p,
-    bytes memory bs,
-    Data memory r
-  ) internal pure returns (uint) {
-    (uint64 x, uint256 sz) = ProtoBufRuntime._decode_uint64(p, bs);
-    r.operator_index = x;
     return sz;
   }
 
@@ -613,18 +517,9 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
     );
     pointer += ProtoBufRuntime._encode_bytes(r.signing_cert, pointer, bs);
     }
-    if (r.operator_index != 0) {
-    pointer += ProtoBufRuntime._encode_key(
-      4,
-      ProtoBufRuntime.WireType.Varint,
-      pointer,
-      bs
-    );
-    pointer += ProtoBufRuntime._encode_uint64(r.operator_index, pointer, bs);
-    }
     if (r.operator_signature.length != 0) {
     pointer += ProtoBufRuntime._encode_key(
-      5,
+      4,
       ProtoBufRuntime.WireType.LengthDelim,
       pointer,
       bs
@@ -677,7 +572,6 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
     e += 1 + ProtoBufRuntime._sz_lendelim(bytes(r.report).length);
     e += 1 + ProtoBufRuntime._sz_lendelim(r.signature.length);
     e += 1 + ProtoBufRuntime._sz_lendelim(r.signing_cert.length);
-    e += 1 + ProtoBufRuntime._sz_uint64(r.operator_index);
     e += 1 + ProtoBufRuntime._sz_lendelim(r.operator_signature.length);
     return e;
   }
@@ -699,10 +593,6 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
     return false;
   }
 
-  if (r.operator_index != 0) {
-    return false;
-  }
-
   if (r.operator_signature.length != 0) {
     return false;
   }
@@ -721,7 +611,6 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
     output.report = input.report;
     output.signature = input.signature;
     output.signing_cert = input.signing_cert;
-    output.operator_index = input.operator_index;
     output.operator_signature = input.operator_signature;
 
   }

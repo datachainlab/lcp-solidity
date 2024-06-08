@@ -49,8 +49,9 @@ interface ILCPClientErrors {
     error LCPClientAVRInvalidSignature();
     error LCPClientAVRAlreadyExpired();
 
-    error LCPClientInvalidSignersLength();
     error LCPClientInvalidSignaturesLength();
 
-    error LCPClientRegisterEnclaveKeyUnexpectedOperator(uint64 index, address gotOperator, address actualOperator);
+    error LCPClientAVRUnexpectedOperator(address gotOperator, address actualOperator);
+
+    error LCPClientUpdateOperatorsPermissionless();
 }
