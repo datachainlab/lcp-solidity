@@ -27,7 +27,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
     }
 
     struct EKInfo {
-        uint256 expiredAt;
+        uint64 expiredAt;
         address operator;
     }
 
@@ -485,7 +485,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         }
 
         ProtoClientState.Data storage clientState = clientStates[clientId];
-        (address enclaveKey, address expectedOperator, uint256 attestationTime, bytes32 mrenclave) = AVRValidator
+        (address enclaveKey, address expectedOperator, uint64 attestationTime, bytes32 mrenclave) = AVRValidator
             .validateAndExtractElements(
             developmentMode, bytes(message.report), allowedQuoteStatuses[clientId], allowedAdvisories[clientId]
         );
@@ -503,7 +503,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
                 revert LCPClientAVRUnexpectedOperator(operator, expectedOperator);
             }
         }
-        uint256 expiredAt = attestationTime + clientState.key_expiration;
+        uint64 expiredAt = attestationTime + clientState.key_expiration;
         if (expiredAt <= block.timestamp) {
             revert LCPClientAVRAlreadyExpired();
         }

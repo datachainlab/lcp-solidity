@@ -270,7 +270,7 @@ library AVRValidator {
         bytes calldata report,
         mapping(string => uint256) storage allowedQuoteStatuses,
         mapping(string => uint256) storage allowedAdvisories
-    ) public view returns (address, address, uint256, bytes32) {
+    ) public view returns (address, address, uint64, bytes32) {
         // find 'timestamp' key
         (uint256 i, bytes memory timestamp) = consumeTimestampReportJSON(report, 0);
         uint256 checkpoint;
@@ -317,12 +317,14 @@ library AVRValidator {
         } else {
             require(attributesFlags & uint8(2) == uint8(0), "disallowed debug enclave");
         }
+        uint256 attestationTime = LCPUtils.attestationTimestampToSeconds(timestamp);
+        require(attestationTime <= type(uint64).max, "timestamp is too large");
         // report data layout
         // |enclave public key: 20|operator: 20|reserved: 24
         return (
             address(quoteDecoded.readBytes20(368)),
             address(quoteDecoded.readBytes20(388)),
-            LCPUtils.attestationTimestampToSeconds(timestamp),
+            uint64(attestationTime),
             quoteDecoded.readBytes32(112)
         );
     }
