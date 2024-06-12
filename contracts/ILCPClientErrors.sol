@@ -9,6 +9,7 @@ interface ILCPClientErrors {
     error LCPClientClientStateInvalidMrenclaveLength();
     error LCPClientClientStateUnexpectedMrenclave();
     error LCPClientClientStateEmptyOperators();
+    error LCPClientClientStateInvalidOperatorAddress();
     error LCPClientClientStateInvalidOperatorAddressLength();
     error LCPClientClientStateInvalidOperatorsNonce();
     error LCPClientClientStateUnexpectedOperatorsNonce(uint64 expectedNonce);

@@ -128,6 +128,9 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
                 revert LCPClientClientStateInvalidOperatorAddressLength();
             }
             address addr = address(bytes20(clientState.operators[i]));
+            if (addr == address(0)) {
+                revert LCPClientClientStateInvalidOperatorAddress();
+            }
             if (prev != address(0)) {
                 if (prev >= addr) {
                     revert LCPClientOperatorsInvalidOrder(prev, addr);
@@ -490,13 +493,16 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
             revert LCPClientClientStateUnexpectedMrenclave();
         }
 
-        address operator = verifyECDSASignature(
-            keccak256(LCPOperator.computeEIP712RegisterEnclaveKey(message.report)), message.operator_signature
-        );
-        if (expectedOperator != address(0) && expectedOperator != operator) {
-            revert LCPClientAVRUnexpectedOperator(operator, expectedOperator);
+        // if `operator_signature` is empty, the operator address is zero
+        address operator;
+        if (message.operator_signature.length != 0) {
+            operator = verifyECDSASignature(
+                keccak256(LCPOperator.computeEIP712RegisterEnclaveKey(message.report)), message.operator_signature
+            );
+            if (expectedOperator != address(0) && expectedOperator != operator) {
+                revert LCPClientAVRUnexpectedOperator(operator, expectedOperator);
+            }
         }
-
         uint256 expiredAt = attestationTime + clientState.key_expiration;
         if (expiredAt <= block.timestamp) {
             revert LCPClientAVRAlreadyExpired();
@@ -512,8 +518,8 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
             // NOTE: if the key already exists, don't update any state
             return heights;
         }
-        ekInfo.operator = operator;
         ekInfo.expiredAt = expiredAt;
+        ekInfo.operator = operator;
 
         emit RegisteredEnclaveKey(clientId, enclaveKey, expiredAt, operator);
 
