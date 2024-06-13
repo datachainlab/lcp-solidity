@@ -252,6 +252,37 @@ contract LCPClientOperatorTest is BasicTest {
             );
             lc.updateOperators(clientId, message);
         }
+        {
+            bytes[] memory signatures = generateSignatures(
+                wallets,
+                keccak256(
+                    LCPOperatorTestHelper.computeEIP712UpdateOperators(
+                        block.chainid, address(lc), clientId, nextNonce, operators, 1, 1
+                    )
+                ),
+                genValidIndices([false, true, true, true])
+            );
+            UpdateOperatorsMessage.Data memory message = createUpdateOperators(nextNonce, operators, signatures, 1, 1);
+            lc.updateOperators(clientId, message);
+            nextNonce++;
+        }
+        {
+            bytes[] memory signatures = generateSignatures(
+                wallets,
+                keccak256(
+                    LCPOperatorTestHelper.computeEIP712UpdateOperators(
+                        block.chainid, address(lc), clientId, nextNonce, operators, 1, 1
+                    )
+                ),
+                genValidIndices([false, true, true, true])
+            );
+            UpdateOperatorsMessage.Data memory message = createUpdateOperators(nextNonce, operators, signatures, 1, 1);
+            vm.expectRevert(
+                abi.encodeWithSelector(ILCPClientErrors.LCPClientOperatorSignaturesInsufficient.selector, 3)
+            );
+            lc.updateOperators(clientId, message);
+            nextNonce++;
+        }
     }
 
     function generateSignature(Vm.Wallet memory wallet, bytes32 commitment, bool valid)
