@@ -297,7 +297,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
     {
         ProtoClientState.Data storage clientState = clientStates[clientId];
         bytes32 commitment = keccak256(commitmentProofs.message);
-        verifyOperatorProofs(clientId, clientState, commitment, commitmentProofs.signatures);
+        verifySignatures(clientId, clientState, commitment, commitmentProofs.signatures);
     }
 
     /**
@@ -328,7 +328,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         return (LCPProtoMarshaler.marshalConsensusState(consensusState.stateId, consensusState.timestamp), true);
     }
 
-    function verifyOperatorProofs(
+    function verifySignatures(
         string calldata clientId,
         ProtoClientState.Data storage clientState,
         bytes32 commitment,
@@ -368,7 +368,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
     {
         ProtoClientState.Data storage clientState = clientStates[clientId];
 
-        verifyOperatorProofs(clientId, clientState, keccak256(message.proxy_message), message.signatures);
+        verifySignatures(clientId, clientState, keccak256(message.proxy_message), message.signatures);
 
         LCPCommitment.HeaderedProxyMessage memory hm =
             abi.decode(message.proxy_message, (LCPCommitment.HeaderedProxyMessage));
