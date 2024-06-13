@@ -32,7 +32,7 @@ contract LCPClientOperatorTest is BasicTest {
         return string(abi.encodePacked("test/data/client/03/", filename));
     }
 
-    function testPreComputationValues() public {
+    function testPreComputationValues() public pure {
         assertEq(LCPOperator.domainSeparator(0, address(0)), LCPOperator.DOMAIN_SEPARATOR_REGISTER_ENCLAVE_KEY);
     }
 
@@ -44,7 +44,7 @@ contract LCPClientOperatorTest is BasicTest {
         }
         string memory clientId = generateClientId(1);
         {
-            ClientState.Data memory clientState = createInitialState(avr("001-avr"), operators, 1, 1);
+            ClientState.Data memory clientState = createInitialState(avr("001-avr"), operators, 2, 3);
             ConsensusState.Data memory consensusState;
             Height.Data memory height = lc.initializeClient(
                 clientId, LCPProtoMarshaler.marshal(clientState), LCPProtoMarshaler.marshal(consensusState)
@@ -179,12 +179,12 @@ contract LCPClientOperatorTest is BasicTest {
                 wallets,
                 keccak256(
                     LCPOperatorTestHelper.computeEIP712UpdateOperators(
-                        block.chainid, address(lc), clientId, nextNonce, operators
+                        block.chainid, address(lc), clientId, nextNonce, operators, 2, 3
                     )
                 ),
                 genValidIndices([true, true, true, true])
             );
-            UpdateOperatorsMessage.Data memory message = createUpdateOperators(nextNonce, operators, signatures);
+            UpdateOperatorsMessage.Data memory message = createUpdateOperators(nextNonce, operators, signatures, 2, 3);
             lc.updateOperators(clientId, message);
             nextNonce++;
         }
@@ -193,12 +193,12 @@ contract LCPClientOperatorTest is BasicTest {
                 wallets,
                 keccak256(
                     LCPOperatorTestHelper.computeEIP712UpdateOperators(
-                        block.chainid, address(lc), clientId, nextNonce, operators
+                        block.chainid, address(lc), clientId, nextNonce, operators, 2, 3
                     )
                 ),
                 genValidIndices([false, true, true, true])
             );
-            UpdateOperatorsMessage.Data memory message = createUpdateOperators(nextNonce, operators, signatures);
+            UpdateOperatorsMessage.Data memory message = createUpdateOperators(nextNonce, operators, signatures, 2, 3);
             lc.updateOperators(clientId, message);
             nextNonce++;
         }
@@ -207,12 +207,12 @@ contract LCPClientOperatorTest is BasicTest {
                 wallets,
                 keccak256(
                     LCPOperatorTestHelper.computeEIP712UpdateOperators(
-                        block.chainid, address(lc), clientId, nextNonce, operators
+                        block.chainid, address(lc), clientId, nextNonce, operators, 2, 3
                     )
                 ),
                 genValidIndices([false, true, true, false])
             );
-            UpdateOperatorsMessage.Data memory message = createUpdateOperators(nextNonce, operators, signatures);
+            UpdateOperatorsMessage.Data memory message = createUpdateOperators(nextNonce, operators, signatures, 2, 3);
             vm.expectRevert(
                 abi.encodeWithSelector(ILCPClientErrors.LCPClientOperatorSignaturesInsufficient.selector, 2)
             );
@@ -223,12 +223,12 @@ contract LCPClientOperatorTest is BasicTest {
                 wallets,
                 keccak256(
                     LCPOperatorTestHelper.computeEIP712UpdateOperators(
-                        block.chainid, address(lc), clientId, nextNonce, operators
+                        block.chainid, address(lc), clientId, nextNonce, operators, 2, 3
                     )
                 ),
                 genValidIndices([false, false, false, false])
             );
-            UpdateOperatorsMessage.Data memory message = createUpdateOperators(nextNonce, operators, signatures);
+            UpdateOperatorsMessage.Data memory message = createUpdateOperators(nextNonce, operators, signatures, 2, 3);
             vm.expectRevert(
                 abi.encodeWithSelector(ILCPClientErrors.LCPClientOperatorSignaturesInsufficient.selector, 0)
             );
@@ -239,14 +239,14 @@ contract LCPClientOperatorTest is BasicTest {
                 wallets,
                 keccak256(
                     LCPOperatorTestHelper.computeEIP712UpdateOperators(
-                        block.chainid, address(lc), clientId, nextNonce, operators
+                        block.chainid, address(lc), clientId, nextNonce, operators, 2, 3
                     )
                 ),
                 genValidIndices([true, true, true, true])
             );
             // signatures are valid but duplicated
             (signatures[1], signatures[2], signatures[3]) = (signatures[0], signatures[0], signatures[0]);
-            UpdateOperatorsMessage.Data memory message = createUpdateOperators(nextNonce, operators, signatures);
+            UpdateOperatorsMessage.Data memory message = createUpdateOperators(nextNonce, operators, signatures, 2, 3);
             vm.expectRevert(
                 abi.encodeWithSelector(ILCPClientErrors.LCPClientOperatorSignaturesInsufficient.selector, 1)
             );
@@ -366,16 +366,20 @@ contract LCPClientOperatorTest is BasicTest {
         return createUpdateClientMessage(dir, prefixes_);
     }
 
-    function createUpdateOperators(uint64 nonce, address[] memory newOperators, bytes[] memory signatures)
-        internal
-        pure
-        returns (UpdateOperatorsMessage.Data memory message)
-    {
+    function createUpdateOperators(
+        uint64 nonce,
+        address[] memory newOperators,
+        bytes[] memory signatures,
+        uint64 thresholdNumerator,
+        uint64 thresholdDenominator
+    ) internal pure returns (UpdateOperatorsMessage.Data memory message) {
         message.nonce = nonce;
         message.new_operators = new bytes[](newOperators.length);
         for (uint256 i = 0; i < newOperators.length; i++) {
             message.new_operators[i] = abi.encodePacked(newOperators[i]);
         }
+        message.new_operators_threshold_numerator = thresholdNumerator;
+        message.new_operators_threshold_denominator = thresholdDenominator;
         message.signatures = signatures;
     }
 }

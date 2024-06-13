@@ -538,6 +538,9 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         if (message.signatures.length != clientState.operators.length) {
             revert LCPClientInvalidSignaturesLength();
         }
+        if (message.new_operators_threshold_numerator == 0 || message.new_operators_threshold_denominator == 0) {
+            revert LCPClientClientStateInvalidOperatorsThreshold();
+        }
         uint64 nonce = clientState.operators_nonce;
         uint64 nextNonce = nonce + 1;
         if (message.nonce != nextNonce) {
@@ -550,7 +553,15 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
             }
             newOperators[i] = address(bytes20(message.new_operators[i]));
         }
-        bytes32 commitment = keccak256(LCPOperator.computeEIP712UpdateOperators(clientId, nextNonce, newOperators));
+        bytes32 commitment = keccak256(
+            LCPOperator.computeEIP712UpdateOperators(
+                clientId,
+                nextNonce,
+                newOperators,
+                message.new_operators_threshold_numerator,
+                message.new_operators_threshold_denominator
+            )
+        );
         uint256 success = 0;
         for (uint256 i = 0; i < message.signatures.length; i++) {
             if (
@@ -575,6 +586,8 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
             clientState.operators.push(message.new_operators[i]);
         }
         clientState.operators_nonce = nextNonce;
+        clientState.operators_threshold_numerator = message.new_operators_threshold_numerator;
+        clientState.operators_threshold_denominator = message.new_operators_threshold_denominator;
         return heights;
     }
 

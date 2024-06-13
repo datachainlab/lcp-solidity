@@ -7,8 +7,9 @@ library LCPOperator {
     bytes32 internal constant TYPEHASH_DOMAIN_SEPARATOR =
         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract,bytes32 salt)");
     bytes32 internal constant TYPEHASH_REGISTER_ENCLAVE_KEY = keccak256("RegisterEnclaveKey(string avr)");
-    bytes32 internal constant TYPEHASH_UPDATE_OPERATORS =
-        keccak256("UpdateOperators(string clientId,uint64 nonce,address[] newOperators)");
+    bytes32 internal constant TYPEHASH_UPDATE_OPERATORS = keccak256(
+        "UpdateOperators(string clientId,uint64 nonce,address[] newOperators,uint64 thresholdNumerator,uint64 thresholdDenominator)"
+    );
 
     bytes32 internal constant DOMAIN_SEPARATOR_NAME = keccak256("LCPClient");
     bytes32 internal constant DOMAIN_SEPARATOR_VERSION = keccak256("1");
@@ -44,12 +45,16 @@ library LCPOperator {
         );
     }
 
-    function computeEIP712UpdateOperators(string calldata clientId, uint64 nonce, address[] memory newOperators)
-        internal
-        view
-        returns (bytes memory)
-    {
-        return computeEIP712UpdateOperators(block.chainid, address(this), clientId, nonce, newOperators);
+    function computeEIP712UpdateOperators(
+        string calldata clientId,
+        uint64 nonce,
+        address[] memory newOperators,
+        uint64 thresholdNumerator,
+        uint64 thresholdDenominator
+    ) internal view returns (bytes memory) {
+        return computeEIP712UpdateOperators(
+            block.chainid, address(this), clientId, nonce, newOperators, thresholdNumerator, thresholdDenominator
+        );
     }
 
     function computeEIP712UpdateOperators(
@@ -57,7 +62,9 @@ library LCPOperator {
         address verifyingContract,
         string calldata clientId,
         uint64 nonce,
-        address[] memory newOperators
+        address[] memory newOperators,
+        uint64 thresholdNumerator,
+        uint64 thresholdDenominator
     ) internal pure returns (bytes memory) {
         return abi.encodePacked(
             hex"1901",
@@ -67,7 +74,9 @@ library LCPOperator {
                     TYPEHASH_UPDATE_OPERATORS,
                     keccak256(bytes(clientId)),
                     nonce,
-                    keccak256(abi.encodePacked(newOperators))
+                    keccak256(abi.encodePacked(newOperators)),
+                    thresholdNumerator,
+                    thresholdDenominator
                 )
             )
         );

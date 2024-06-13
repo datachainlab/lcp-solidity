@@ -139,9 +139,13 @@ library LCPOperatorTestHelper {
         address verifyingContract,
         string calldata clientId,
         uint64 nonce,
-        address[] memory newOperators
+        address[] memory newOperators,
+        uint64 thresholdNumerator,
+        uint64 thresholdDenominator
     ) public pure returns (bytes memory) {
-        return LCPOperator.computeEIP712UpdateOperators(chainId, verifyingContract, clientId, nonce, newOperators);
+        return LCPOperator.computeEIP712UpdateOperators(
+            chainId, verifyingContract, clientId, nonce, newOperators, thresholdNumerator, thresholdDenominator
+        );
     }
 
     function computeEIP712RegisterEnclaveKey(string memory avr) public pure returns (bytes memory) {

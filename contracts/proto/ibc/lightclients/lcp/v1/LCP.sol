@@ -648,6 +648,8 @@ library IbcLightclientsLcpV1UpdateOperatorsMessage {
   struct Data {
     uint64 nonce;
     bytes[] new_operators;
+    uint64 new_operators_threshold_numerator;
+    uint64 new_operators_threshold_denominator;
     bytes[] signatures;
   }
 
@@ -688,7 +690,7 @@ library IbcLightclientsLcpV1UpdateOperatorsMessage {
     returns (Data memory, uint)
   {
     Data memory r;
-    uint[4] memory counters;
+    uint[6] memory counters;
     uint256 fieldId;
     ProtoBufRuntime.WireType wireType;
     uint256 bytesRead;
@@ -704,6 +706,12 @@ library IbcLightclientsLcpV1UpdateOperatorsMessage {
         pointer += _read_unpacked_repeated_new_operators(pointer, bs, nil(), counters);
       } else
       if (fieldId == 3) {
+        pointer += _read_new_operators_threshold_numerator(pointer, bs, r);
+      } else
+      if (fieldId == 4) {
+        pointer += _read_new_operators_threshold_denominator(pointer, bs, r);
+      } else
+      if (fieldId == 5) {
         pointer += _read_unpacked_repeated_signatures(pointer, bs, nil(), counters);
       } else
       {
@@ -716,9 +724,9 @@ library IbcLightclientsLcpV1UpdateOperatorsMessage {
       require(r.new_operators.length == 0);
       r.new_operators = new bytes[](counters[2]);
     }
-    if (counters[3] > 0) {
+    if (counters[5] > 0) {
       require(r.signatures.length == 0);
-      r.signatures = new bytes[](counters[3]);
+      r.signatures = new bytes[](counters[5]);
     }
 
     while (pointer < offset + sz) {
@@ -727,7 +735,7 @@ library IbcLightclientsLcpV1UpdateOperatorsMessage {
       if (fieldId == 2) {
         pointer += _read_unpacked_repeated_new_operators(pointer, bs, r, counters);
       } else
-      if (fieldId == 3) {
+      if (fieldId == 5) {
         pointer += _read_unpacked_repeated_signatures(pointer, bs, r, counters);
       } else
       {
@@ -768,7 +776,7 @@ library IbcLightclientsLcpV1UpdateOperatorsMessage {
     uint256 p,
     bytes memory bs,
     Data memory r,
-    uint[4] memory counters
+    uint[6] memory counters
   ) internal pure returns (uint) {
     /**
      * if `r` is NULL, then only counting the number of fields.
@@ -788,6 +796,40 @@ library IbcLightclientsLcpV1UpdateOperatorsMessage {
    * @param p The offset of bytes array to start decode
    * @param bs The bytes array to be decoded
    * @param r The in-memory struct
+   * @return The number of bytes decoded
+   */
+  function _read_new_operators_threshold_numerator(
+    uint256 p,
+    bytes memory bs,
+    Data memory r
+  ) internal pure returns (uint) {
+    (uint64 x, uint256 sz) = ProtoBufRuntime._decode_uint64(p, bs);
+    r.new_operators_threshold_numerator = x;
+    return sz;
+  }
+
+  /**
+   * @dev The decoder for reading a field
+   * @param p The offset of bytes array to start decode
+   * @param bs The bytes array to be decoded
+   * @param r The in-memory struct
+   * @return The number of bytes decoded
+   */
+  function _read_new_operators_threshold_denominator(
+    uint256 p,
+    bytes memory bs,
+    Data memory r
+  ) internal pure returns (uint) {
+    (uint64 x, uint256 sz) = ProtoBufRuntime._decode_uint64(p, bs);
+    r.new_operators_threshold_denominator = x;
+    return sz;
+  }
+
+  /**
+   * @dev The decoder for reading a field
+   * @param p The offset of bytes array to start decode
+   * @param bs The bytes array to be decoded
+   * @param r The in-memory struct
    * @param counters The counters for repeated fields
    * @return The number of bytes decoded
    */
@@ -795,17 +837,17 @@ library IbcLightclientsLcpV1UpdateOperatorsMessage {
     uint256 p,
     bytes memory bs,
     Data memory r,
-    uint[4] memory counters
+    uint[6] memory counters
   ) internal pure returns (uint) {
     /**
      * if `r` is NULL, then only counting the number of fields.
      */
     (bytes memory x, uint256 sz) = ProtoBufRuntime._decode_bytes(p, bs);
     if (isNil(r)) {
-      counters[3] += 1;
+      counters[5] += 1;
     } else {
-      r.signatures[r.signatures.length - counters[3]] = x;
-      counters[3] -= 1;
+      r.signatures[r.signatures.length - counters[5]] = x;
+      counters[5] -= 1;
     }
     return sz;
   }
@@ -863,10 +905,28 @@ library IbcLightclientsLcpV1UpdateOperatorsMessage {
       pointer += ProtoBufRuntime._encode_bytes(r.new_operators[i], pointer, bs);
     }
     }
+    if (r.new_operators_threshold_numerator != 0) {
+    pointer += ProtoBufRuntime._encode_key(
+      3,
+      ProtoBufRuntime.WireType.Varint,
+      pointer,
+      bs
+    );
+    pointer += ProtoBufRuntime._encode_uint64(r.new_operators_threshold_numerator, pointer, bs);
+    }
+    if (r.new_operators_threshold_denominator != 0) {
+    pointer += ProtoBufRuntime._encode_key(
+      4,
+      ProtoBufRuntime.WireType.Varint,
+      pointer,
+      bs
+    );
+    pointer += ProtoBufRuntime._encode_uint64(r.new_operators_threshold_denominator, pointer, bs);
+    }
     if (r.signatures.length != 0) {
     for(i = 0; i < r.signatures.length; i++) {
       pointer += ProtoBufRuntime._encode_key(
-        3,
+        5,
         ProtoBufRuntime.WireType.LengthDelim,
         pointer,
         bs)
@@ -921,6 +981,8 @@ library IbcLightclientsLcpV1UpdateOperatorsMessage {
     for(i = 0; i < r.new_operators.length; i++) {
       e += 1 + ProtoBufRuntime._sz_lendelim(r.new_operators[i].length);
     }
+    e += 1 + ProtoBufRuntime._sz_uint64(r.new_operators_threshold_numerator);
+    e += 1 + ProtoBufRuntime._sz_uint64(r.new_operators_threshold_denominator);
     for(i = 0; i < r.signatures.length; i++) {
       e += 1 + ProtoBufRuntime._sz_lendelim(r.signatures[i].length);
     }
@@ -937,6 +999,14 @@ library IbcLightclientsLcpV1UpdateOperatorsMessage {
   }
 
   if (r.new_operators.length != 0) {
+    return false;
+  }
+
+  if (r.new_operators_threshold_numerator != 0) {
+    return false;
+  }
+
+  if (r.new_operators_threshold_denominator != 0) {
     return false;
   }
 
@@ -957,6 +1027,8 @@ library IbcLightclientsLcpV1UpdateOperatorsMessage {
   function store(Data memory input, Data storage output) internal {
     output.nonce = input.nonce;
     output.new_operators = input.new_operators;
+    output.new_operators_threshold_numerator = input.new_operators_threshold_numerator;
+    output.new_operators_threshold_denominator = input.new_operators_threshold_denominator;
     output.signatures = input.signatures;
 
   }
