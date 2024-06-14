@@ -17,8 +17,9 @@ library LCPOperator {
     // domainSeparator(0, address(0))
     bytes32 internal constant DOMAIN_SEPARATOR_REGISTER_ENCLAVE_KEY =
         0xe33d217bff42bc015bf037be8386bf5055ec6019e58e8c5e89b5c74b8225fa6a;
-
     ChainType internal constant CHAIN_TYPE_EVM = ChainType.wrap(1);
+    // chainTypeSalt(CHAIN_TYPE_EVM, hex"")
+    bytes32 internal constant CHAIN_TYPE_EVM_SALT = keccak256(abi.encodePacked(CHAIN_TYPE_EVM, hex""));
 
     function chainTypeSalt(ChainType chainType, bytes memory args) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked(chainType, args));
@@ -32,7 +33,7 @@ library LCPOperator {
                 DOMAIN_SEPARATOR_VERSION,
                 chainId,
                 verifyingContract,
-                chainTypeSalt(CHAIN_TYPE_EVM, hex"")
+                CHAIN_TYPE_EVM_SALT
             )
         );
     }

@@ -34,6 +34,7 @@ contract LCPClientOperatorTest is BasicTest {
 
     function testPreComputationValues() public pure {
         assertEq(LCPOperator.domainSeparator(0, address(0)), LCPOperator.DOMAIN_SEPARATOR_REGISTER_ENCLAVE_KEY);
+        assertEq(LCPOperator.chainTypeSalt(LCPOperator.CHAIN_TYPE_EVM, hex""), LCPOperator.CHAIN_TYPE_EVM_SALT);
     }
 
     function testRegisterEnclaveKeyMultiOperators() public {
