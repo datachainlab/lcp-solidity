@@ -320,10 +320,12 @@ library AVRValidator {
         uint256 attestationTime = LCPUtils.attestationTimestampToSeconds(timestamp);
         require(attestationTime <= type(uint64).max, "timestamp is too large");
         // report data layout
-        // |enclave public key: 20|operator: 20|reserved: 24
+        // |report data type: 1|enclave public key: 20|operator: 20|reserved: 23
+        // |368                |369                   |389         |409
+        require(quoteDecoded[368] == bytes1(uint8(1)), "report data type is not 1");
         return (
-            address(quoteDecoded.readBytes20(368)),
-            address(quoteDecoded.readBytes20(388)),
+            address(quoteDecoded.readBytes20(369)),
+            address(quoteDecoded.readBytes20(389)),
             uint64(attestationTime),
             quoteDecoded.readBytes32(112)
         );

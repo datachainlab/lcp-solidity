@@ -150,7 +150,7 @@ contract CreateClientBenchmark is BaseLCPClientBenchmark {
 
 contract UpdateClientBenchmark is BaseLCPClientBenchmark {
     function setUp() public {
-        vm.warp(1703138378);
+        vm.warp(1718461269);
         lc = createLCContract();
         clientId = generateClientId(1);
         createClient();
@@ -158,13 +158,13 @@ contract UpdateClientBenchmark is BaseLCPClientBenchmark {
         Height.Data[] memory heights = lc.registerEnclaveKey(clientId, createRegisterEnclaveKeyMessage(commandAvrFile));
         require(heights.length == 0);
 
-        heights = lc.updateClient(clientId, createUpdateClientMessage("test/data/client/02/004-update_client"));
+        heights = lc.updateClient(clientId, createUpdateClientMessage("test/data/client/02/003-update_client"));
         require(heights.length == 1, "heights length must be 1");
     }
 
     function testUpdateClient() public {
         Height.Data[] memory heights =
-            lc.updateClient(clientId, createUpdateClientMessage("test/data/client/02/007-update_client"));
+            lc.updateClient(clientId, createUpdateClientMessage("test/data/client/02/005-update_client"));
         require(heights.length == 1, "heights length must be 1");
     }
 }

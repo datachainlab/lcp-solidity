@@ -347,11 +347,10 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
             }
             uint256 success = 0;
             for (uint256 i = 0; i < sigNum; i++) {
-                if (signatures[i].length != 0) {
+                bytes memory sig = signatures[i];
+                if (sig.length != 0) {
                     ensureActiveKey(
-                        clientId,
-                        verifyECDSASignature(commitment, signatures[i]),
-                        address(bytes20(clientState.operators[i]))
+                        clientId, verifyECDSASignature(commitment, sig), address(bytes20(clientState.operators[i]))
                     );
                     unchecked {
                         success++;
@@ -532,10 +531,12 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         returns (Height.Data[] memory heights)
     {
         ProtoClientState.Data storage clientState = clientStates[clientId];
-        if (clientState.operators.length == 0) {
+        uint256 opNum = clientState.operators.length;
+        uint256 sigNum = message.signatures.length;
+        if (opNum == 0) {
             revert LCPClientUpdateOperatorsPermissionless();
         }
-        if (message.signatures.length != clientState.operators.length) {
+        if (sigNum != opNum) {
             revert LCPClientInvalidSignaturesLength();
         }
         if (message.new_operators_threshold_numerator == 0 || message.new_operators_threshold_denominator == 0) {
@@ -563,7 +564,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
             )
         );
         uint256 success = 0;
-        for (uint256 i = 0; i < message.signatures.length; i++) {
+        for (uint256 i = 0; i < sigNum; i++) {
             if (
                 message.signatures[i].length > 0
                     && verifyECDSASignature(commitment, message.signatures[i], address(bytes20(clientState.operators[i])))
@@ -578,9 +579,11 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         // ensure the new operators are sorted(ascending order) and unique
         for (uint256 i = 0; i < newOperators.length; i++) {
             if (i > 0) {
-                address prev = newOperators[i - 1];
-                if (prev >= newOperators[i]) {
-                    revert LCPClientOperatorsInvalidOrder(prev, newOperators[i]);
+                unchecked {
+                    address prev = newOperators[i - 1];
+                    if (prev >= newOperators[i]) {
+                        revert LCPClientOperatorsInvalidOrder(prev, newOperators[i]);
+                    }
                 }
             }
             clientState.operators.push(message.new_operators[i]);
