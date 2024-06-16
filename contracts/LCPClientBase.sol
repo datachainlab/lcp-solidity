@@ -273,11 +273,13 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         bytes memory prefix,
         bytes memory path
     ) internal view {
-        ConsensusState storage consensusState = consensusStates[clientId][message.height.toUint128()];
+        uint128 messageHeight = message.height.toUint128();
+        uint128 heightValue = height.toUint128();
+        ConsensusState storage consensusState = consensusStates[clientId][messageHeight];
         if (consensusState.stateId == bytes32(0)) {
             revert LCPClientConsensusStateNotFound();
         }
-        if (!height.eq(message.height)) {
+        if (heightValue != messageHeight) {
             revert LCPClientMembershipVerificationInvalidHeight();
         }
         if (keccak256(prefix) != keccak256(message.prefix)) {
@@ -409,11 +411,13 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
 
         LCPCommitment.validationContextEval(pmsg.context, block.timestamp * 1e9);
 
-        if (clientState.latest_height.lt(pmsg.postHeight)) {
+        uint128 latestHeight = clientState.latest_height.toUint128();
+        uint128 postHeight = pmsg.postHeight.toUint128();
+        if (latestHeight < postHeight) {
             clientState.latest_height = pmsg.postHeight;
         }
 
-        consensusState = consensusStates[clientId][pmsg.postHeight.toUint128()];
+        consensusState = consensusStates[clientId][postHeight];
         consensusState.stateId = pmsg.postStateId;
         consensusState.timestamp = uint64(pmsg.timestamp);
 
@@ -430,16 +434,19 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         if (clientState.frozen) {
             revert LCPClientClientStateFrozen();
         }
-        if (pmsg.prevStates.length == 0) {
+        uint256 prevStatesNum = pmsg.prevStates.length;
+        if (prevStatesNum == 0) {
             revert LCPClientMisbehaviourPrevStatesMustNotEmpty();
         }
 
-        for (uint256 i = 0; i < pmsg.prevStates.length; i++) {
-            ConsensusState storage consensusState = consensusStates[clientId][pmsg.prevStates[i].height.toUint128()];
-            if (pmsg.prevStates[i].stateId == bytes32(0)) {
+        mapping(uint128 => ConsensusState) storage consensusStates_ = consensusStates[clientId];
+        for (uint256 i = 0; i < prevStatesNum; i++) {
+            LCPCommitment.PrevState memory prev = pmsg.prevStates[i];
+            uint128 prevHeight = prev.height.toUint128();
+            if (prev.stateId == bytes32(0)) {
                 revert LCPClientUpdateStatePrevStateIdMustNotEmpty();
             }
-            if (consensusState.stateId != pmsg.prevStates[i].stateId) {
+            if (consensusStates_[prevHeight].stateId != prev.stateId) {
                 revert LCPClientUpdateStateUnexpectedPrevStateId();
             }
         }
