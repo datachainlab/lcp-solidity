@@ -38,11 +38,11 @@ library LCPOperator {
         );
     }
 
-    function computeEIP712RegisterEnclaveKey(string memory avr) internal pure returns (bytes memory) {
+    function computeEIP712RegisterEnclaveKey(bytes calldata avr) internal pure returns (bytes memory) {
         return abi.encodePacked(
             hex"1901",
             DOMAIN_SEPARATOR_REGISTER_ENCLAVE_KEY,
-            keccak256(abi.encode(TYPEHASH_REGISTER_ENCLAVE_KEY, keccak256(bytes(avr))))
+            keccak256(abi.encode(TYPEHASH_REGISTER_ENCLAVE_KEY, keccak256(avr)))
         );
     }
 

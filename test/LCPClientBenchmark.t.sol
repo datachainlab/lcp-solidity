@@ -67,7 +67,7 @@ abstract contract BaseLCPClientBenchmark is BasicTest {
         internal
         returns (RegisterEnclaveKeyMessage.Data memory message)
     {
-        message.report = string(readJSON(avrFile, ".avr"));
+        message.report = readJSON(avrFile, ".avr");
         message.signature = readDecodedBytes(avrFile, ".signature");
         message.signing_cert = readDecodedBytes(avrFile, ".signing_cert");
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(

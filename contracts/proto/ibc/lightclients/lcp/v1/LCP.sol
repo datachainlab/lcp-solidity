@@ -316,7 +316,7 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
 
   //struct definition
   struct Data {
-    string report;
+    bytes report;
     bytes signature;
     bytes signing_cert;
     bytes operator_signature;
@@ -401,7 +401,7 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
     bytes memory bs,
     Data memory r
   ) internal pure returns (uint) {
-    (string memory x, uint256 sz) = ProtoBufRuntime._decode_string(p, bs);
+    (bytes memory x, uint256 sz) = ProtoBufRuntime._decode_bytes(p, bs);
     r.report = x;
     return sz;
   }
@@ -490,14 +490,14 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
     uint256 offset = p;
     uint256 pointer = p;
     
-    if (bytes(r.report).length != 0) {
+    if (r.report.length != 0) {
     pointer += ProtoBufRuntime._encode_key(
       1,
       ProtoBufRuntime.WireType.LengthDelim,
       pointer,
       bs
     );
-    pointer += ProtoBufRuntime._encode_string(r.report, pointer, bs);
+    pointer += ProtoBufRuntime._encode_bytes(r.report, pointer, bs);
     }
     if (r.signature.length != 0) {
     pointer += ProtoBufRuntime._encode_key(
@@ -569,7 +569,7 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
     Data memory r
   ) internal pure returns (uint) {
     uint256 e;
-    e += 1 + ProtoBufRuntime._sz_lendelim(bytes(r.report).length);
+    e += 1 + ProtoBufRuntime._sz_lendelim(r.report.length);
     e += 1 + ProtoBufRuntime._sz_lendelim(r.signature.length);
     e += 1 + ProtoBufRuntime._sz_lendelim(r.signing_cert.length);
     e += 1 + ProtoBufRuntime._sz_lendelim(r.operator_signature.length);
@@ -581,7 +581,7 @@ library IbcLightclientsLcpV1RegisterEnclaveKeyMessage {
     Data memory r
   ) internal pure returns (bool) {
     
-  if (bytes(r.report).length != 0) {
+  if (r.report.length != 0) {
     return false;
   }
 

@@ -148,7 +148,7 @@ library LCPOperatorTestHelper {
         );
     }
 
-    function computeEIP712RegisterEnclaveKey(string memory avr) public pure returns (bytes memory) {
+    function computeEIP712RegisterEnclaveKey(bytes calldata avr) public pure returns (bytes memory) {
         return LCPOperator.computeEIP712RegisterEnclaveKey(avr);
     }
 }

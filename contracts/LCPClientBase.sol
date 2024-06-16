@@ -482,7 +482,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
             verifiedRootCAParams,
             verifiedSigningRSAParams,
             clientStorage.allowedStatuses,
-            bytes(message.report),
+            message.report,
             message.signing_cert,
             message.signature
         );
