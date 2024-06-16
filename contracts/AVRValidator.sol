@@ -6,6 +6,7 @@ import {BytesUtils} from "@ensdomains/ens-contracts/contracts/dnssec-oracle/Byte
 import {Base64} from "base64/base64.sol";
 import {Asn1Decode, NodePtr} from "./Asn1Decode.sol";
 import {LCPUtils} from "./LCPUtils.sol";
+import {ILCPClientErrors} from "./ILCPClientErrors.sol";
 
 /**
  * @dev AVRValidator provides the validation functions of Intel's Attestation Verification Report(AVR)
@@ -49,6 +50,55 @@ library AVRValidator {
         uint256 notAfter; // seconds since epoch
     }
 
+    struct ReportAllowedStatus {
+        // quote status => flag(0: not allowed, 1: allowed)
+        mapping(string => uint256) allowedQuoteStatuses;
+        // advisory id => flag(0: not allowed, 1: allowed)
+        mapping(string => uint256) allowedAdvisories;
+    }
+
+    // ------------------ Public functions ------------------
+
+    struct ReportExtractedElements {
+        address enclaveKey;
+        address operator;
+        uint64 attestationTime;
+        bytes32 mrenclave;
+    }
+
+    function verifyReport(
+        bool developmentMode,
+        AVRValidator.RSAParams storage verifiedRootCAParams,
+        mapping(bytes32 => AVRValidator.RSAParams) storage verifiedSigningRSAParams,
+        ReportAllowedStatus storage allowedStatuses,
+        bytes calldata report,
+        bytes calldata signingCert,
+        bytes calldata signature
+    ) public returns (ReportExtractedElements memory) {
+        RSAParams storage params = verifiedSigningRSAParams[keccak256(signingCert)];
+        if (params.notAfter == 0) {
+            if (verifiedRootCAParams.notAfter <= block.timestamp) {
+                revert ILCPClientErrors.LCPClientIASRootCertExpired();
+            }
+            AVRValidator.RSAParams memory p =
+                verifySigningCert(verifiedRootCAParams.modulus, verifiedRootCAParams.exponent, signingCert);
+            params.modulus = p.modulus;
+            params.exponent = p.exponent;
+            // NOTE: notAfter is the minimum of rootCACert and signingCert
+            if (verifiedRootCAParams.notAfter > p.notAfter) {
+                params.notAfter = p.notAfter;
+            } else {
+                params.notAfter = verifiedRootCAParams.notAfter;
+            }
+        } else if (params.notAfter <= block.timestamp) {
+            revert ILCPClientErrors.LCPClientIASCertExpired();
+        }
+        if (!verifySignature(sha256(report), signature, params.exponent, params.modulus)) {
+            revert ILCPClientErrors.LCPClientAVRInvalidSignature();
+        }
+        return validateAndExtractElements(developmentMode, report, allowedStatuses);
+    }
+
     /**
      * @dev verifySignature verifies the RSA signature of the report.
      * @param reportSha256 is sha256(AVR)
@@ -59,8 +109,8 @@ library AVRValidator {
     function verifySignature(
         bytes32 reportSha256,
         bytes calldata signature,
-        bytes calldata exponent,
-        bytes calldata modulus
+        bytes memory exponent,
+        bytes memory modulus
     ) public view returns (bool) {
         (bool ok, bytes memory result) = RSAVerify.rsarecover(modulus, exponent, signature);
         // Verify it ends with the hash of our data
@@ -85,8 +135,8 @@ library AVRValidator {
      *      Please read the comments of parseCertificate for the expected structure of the certificate.
      */
     function verifySigningCert(
-        bytes calldata rootCAPublicKeyModulus,
-        bytes calldata rootCAPublicKeyExponent,
+        bytes memory rootCAPublicKeyModulus,
+        bytes memory rootCAPublicKeyExponent,
         bytes calldata signingCert
     ) public view returns (RSAParams memory) {
         (bytes memory modulus, bytes memory exponent, bytes32 signedData, bytes memory signature, uint256 notAfter) =
@@ -120,18 +170,12 @@ library AVRValidator {
      *   "platformInfoBlob": "1502006504000F00000F0F020202800E0000000000000000000D00000C000000020000000000000BF1FF71C73902CC168C67B32BABE311C8DCD69AA9A065D5DA1F575FA5939FD06B43FC187CDBDF97C972CA863F96A6EA5E6BB7313B5A38E28C2D117C990CEAA9CF3A",
      *   "isvEnclaveQuoteBody": "AgAAAPELAAALAAoAAAAAALCbZcb+Fr6JI5sV5pIlYVt2GdTw6l8Ea6v+ySKOFbzvDQ3//wKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwAAAAAAAAAHAAAAAAAAADRdEEo/Gd2j3BUnuFH3PJYMIqpCpDr30GLCEPnHnp+kAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACD1xnnferKFHD2uvYqTXdDA8iZ22kCD5xw7h38CMfOngAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABNFlyxvu2l+vFxOlwhIAe+KlPZewAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
      * }
-     *
-     * @return address of EnclaveKey
-     * @return address of Operator
-     * @return timestamp when report was attested
-     * @return mrenclave of the attested enclave
      */
     function validateAndExtractElements(
         bool developmentMode,
         bytes calldata report,
-        mapping(string => uint256) storage allowedQuoteStatuses,
-        mapping(string => uint256) storage allowedAdvisories
-    ) public view returns (address, address, uint64, bytes32) {
+        ReportAllowedStatus storage allowedStatus
+    ) public view returns (ReportExtractedElements memory) {
         // find 'timestamp' key
         (uint256 i, bytes memory timestamp) = consumeTimestampReportJSON(report, 0);
         uint256 checkpoint;
@@ -145,7 +189,9 @@ library AVRValidator {
         (i, status) = consumeIsvEnclaveQuoteStatusReportJSON(report, i);
         // skip the validation for quote status and advisories if status is "OK"
         if (!(status.length == 2 && status[0] == 0x4f && status[1] == 0x4b)) {
-            require(allowedQuoteStatuses[string(status)] == FLAG_ALLOWED, "the quote status is not allowed");
+            require(
+                allowedStatus.allowedQuoteStatuses[string(status)] == FLAG_ALLOWED, "the quote status is not allowed"
+            );
             bytes32 h = keccak256(status);
             if (
                 h == HASHED_GROUP_OUT_OF_DATE || h == HASHED_CONFIGURATION_NEEDED || h == HASHED_SW_HARDENING_NEEDED
@@ -153,7 +199,7 @@ library AVRValidator {
             ) {
                 // find 'advisoryIDs' key and validate them
                 checkpoint = consumeAdvisoryIdsReportJSON(report, checkpoint);
-                validateAdvisories(report, checkpoint, allowedAdvisories);
+                validateAdvisories(report, checkpoint, allowedStatus.allowedAdvisories);
             }
         }
 
@@ -184,7 +230,7 @@ library AVRValidator {
         // |report data type: 1|enclave public key: 20|operator: 20|reserved: 23
         // |368                |369                   |389         |409
         require(quoteDecoded[368] == bytes1(uint8(1)), "report data type is not 1");
-        return (
+        return ReportExtractedElements(
             address(quoteDecoded.readBytes20(369)),
             address(quoteDecoded.readBytes20(389)),
             uint64(attestationTime),
@@ -229,6 +275,8 @@ library AVRValidator {
         }
         revert("missing listEnd");
     }
+
+    // ------------------ Private functions ------------------
 
     /**
      * @dev parseCertificate parses a given certificate.

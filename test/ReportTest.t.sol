@@ -14,8 +14,7 @@ contract ReportTest is BasicTest {
         address operator;
     }
 
-    mapping(string => uint256) internal allowedQuoteStatuses;
-    mapping(string => uint256) internal allowedAdvisories;
+    AVRValidator.ReportAllowedStatus internal allowedStatuses;
 
     mapping(string => uint256) internal allowedAdvisoriesForValidateAdvisories;
 
@@ -78,10 +77,10 @@ contract ReportTest is BasicTest {
             } else {
                 require(ok, "failed to verify report");
             }
-            (address enclaveKey, address operator,,) =
-                AVRValidator.validateAndExtractElements(true, report, allowedQuoteStatuses, allowedAdvisories);
-            require(c.enclaveKey == enclaveKey, "enclave key mismatch");
-            require(c.operator == operator, "operator mismatch");
+            AVRValidator.ReportExtractedElements memory reElem =
+                AVRValidator.validateAndExtractElements(true, report, allowedStatuses);
+            require(c.enclaveKey == reElem.enclaveKey, "enclave key mismatch");
+            require(c.operator == reElem.operator, "operator mismatch");
         }
     }
 
@@ -92,8 +91,9 @@ contract ReportTest is BasicTest {
                 continue;
             }
             bytes memory report = readReport(c.path);
-            try AVRValidator.validateAndExtractElements(false, report, allowedQuoteStatuses, allowedAdvisories)
-            returns (address, address, uint64, bytes32) {
+            try AVRValidator.validateAndExtractElements(false, report, allowedStatuses) returns (
+                AVRValidator.ReportExtractedElements memory
+            ) {
                 revert("An AVR for debug enclave must be disallowed");
             } catch (bytes memory) {}
         }
@@ -126,9 +126,9 @@ contract ReportTest is BasicTest {
     }
 
     function initAllowedStatusAdvisories(string memory quoteStatus, string[] memory advisories) internal {
-        allowedQuoteStatuses[quoteStatus] = AVRValidator.FLAG_ALLOWED;
+        allowedStatuses.allowedQuoteStatuses[quoteStatus] = AVRValidator.FLAG_ALLOWED;
         for (uint256 i = 0; i < advisories.length; i++) {
-            allowedAdvisories[advisories[i]] = AVRValidator.FLAG_ALLOWED;
+            allowedStatuses.allowedAdvisories[advisories[i]] = AVRValidator.FLAG_ALLOWED;
         }
     }
 
