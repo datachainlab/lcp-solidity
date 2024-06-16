@@ -34,7 +34,8 @@ library LCPProtoMarshaler {
     function marshalConsensusState(bytes32 stateId, uint64 timestamp) public pure returns (bytes memory) {
         Any.Data memory anyConsensusState;
         anyConsensusState.type_url = CONSENSUS_STATE_TYPE_URL;
-        anyConsensusState.value = abi.encodePacked(stateId, timestamp);
+        anyConsensusState.value =
+            ConsensusState.encode(ConsensusState.Data({state_id: abi.encodePacked(stateId), timestamp: timestamp}));
         return Any.encode(anyConsensusState);
     }
 
