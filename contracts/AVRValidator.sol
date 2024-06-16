@@ -99,6 +99,138 @@ library AVRValidator {
     }
 
     /**
+     * @dev validateAndExtractElements try to parse a given report.
+     * The parser expects the following structure(pretty printed):
+     * {
+     *   "id": "120273546145229684841731255506776325150",
+     *   "timestamp": "2022-12-01T09:49:53.473230",
+     *   "version": 4,
+     *   "advisoryURL": "https://security-center.intel.com", // optional
+     *   "advisoryIDs": [ // optional
+     *      "INTEL-SA-00219",
+     *      "INTEL-SA-00289",
+     *      "INTEL-SA-00614",
+     *      "INTEL-SA-00617",
+     *      "INTEL-SA-00477",
+     *      "INTEL-SA-00615",
+     *      "INTEL-SA-00334"
+     *   ],
+     *   "isvEnclaveQuoteStatus": "GROUP_OUT_OF_DATE",
+     *   // optional
+     *   "platformInfoBlob": "1502006504000F00000F0F020202800E0000000000000000000D00000C000000020000000000000BF1FF71C73902CC168C67B32BABE311C8DCD69AA9A065D5DA1F575FA5939FD06B43FC187CDBDF97C972CA863F96A6EA5E6BB7313B5A38E28C2D117C990CEAA9CF3A",
+     *   "isvEnclaveQuoteBody": "AgAAAPELAAALAAoAAAAAALCbZcb+Fr6JI5sV5pIlYVt2GdTw6l8Ea6v+ySKOFbzvDQ3//wKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwAAAAAAAAAHAAAAAAAAADRdEEo/Gd2j3BUnuFH3PJYMIqpCpDr30GLCEPnHnp+kAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACD1xnnferKFHD2uvYqTXdDA8iZ22kCD5xw7h38CMfOngAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABNFlyxvu2l+vFxOlwhIAe+KlPZewAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+     * }
+     *
+     * @return address of EnclaveKey
+     * @return address of Operator
+     * @return timestamp when report was attested
+     * @return mrenclave of the attested enclave
+     */
+    function validateAndExtractElements(
+        bool developmentMode,
+        bytes calldata report,
+        mapping(string => uint256) storage allowedQuoteStatuses,
+        mapping(string => uint256) storage allowedAdvisories
+    ) public view returns (address, address, uint64, bytes32) {
+        // find 'timestamp' key
+        (uint256 i, bytes memory timestamp) = consumeTimestampReportJSON(report, 0);
+        uint256 checkpoint;
+
+        // find 'version' key
+        i = consumeVersionReportJSON(report, i);
+        checkpoint = i;
+
+        // find 'isvEnclaveQuoteStatus' key
+        bytes memory status;
+        (i, status) = consumeIsvEnclaveQuoteStatusReportJSON(report, i);
+        // skip the validation for quote status and advisories if status is "OK"
+        if (!(status.length == 2 && status[0] == 0x4f && status[1] == 0x4b)) {
+            require(allowedQuoteStatuses[string(status)] == FLAG_ALLOWED, "the quote status is not allowed");
+            bytes32 h = keccak256(status);
+            if (
+                h == HASHED_GROUP_OUT_OF_DATE || h == HASHED_CONFIGURATION_NEEDED || h == HASHED_SW_HARDENING_NEEDED
+                    || h == HASHED_CONFIGURATION_AND_SW_HARDENING_NEEDED
+            ) {
+                // find 'advisoryIDs' key and validate them
+                checkpoint = consumeAdvisoryIdsReportJSON(report, checkpoint);
+                validateAdvisories(report, checkpoint, allowedAdvisories);
+            }
+        }
+
+        // find 'platformInfoBlob' key(optional)
+        i = consumePlatformInfoBlobReportJSONIfExists(report, i);
+
+        // find 'isvEnclaveQuoteBody' key
+        i = consumeIsvEnclaveQuoteBodyReportJSON(report, i);
+
+        // decode isvEnclaveQuoteBody
+        // 576 bytes is the length of the quote
+        bytes memory quoteDecoded = Base64.decode(string(report[i:i + 576]));
+
+        /**
+         * parse the quote fields as follows:
+         * https://api.trustedservices.intel.com/documents/sgx-attestation-api-spec.pdf (p.26-27)
+         */
+        uint8 attributesFlags = quoteDecoded.readUint8(96);
+        // check debug flag(0b0000_0010)
+        if (developmentMode) {
+            require(attributesFlags & uint8(2) != uint8(0), "disallowed production enclave");
+        } else {
+            require(attributesFlags & uint8(2) == uint8(0), "disallowed debug enclave");
+        }
+        uint256 attestationTime = LCPUtils.attestationTimestampToSeconds(timestamp);
+        require(attestationTime <= type(uint64).max, "timestamp is too large");
+        // report data layout
+        // |report data type: 1|enclave public key: 20|operator: 20|reserved: 23
+        // |368                |369                   |389         |409
+        require(quoteDecoded[368] == bytes1(uint8(1)), "report data type is not 1");
+        return (
+            address(quoteDecoded.readBytes20(369)),
+            address(quoteDecoded.readBytes20(389)),
+            uint64(attestationTime),
+            quoteDecoded.readBytes32(112)
+        );
+    }
+
+    function validateAdvisories(
+        bytes calldata report,
+        uint256 offset,
+        mapping(string => uint256) storage allowedAdvisories
+    ) public view returns (uint256) {
+        require(offset < report.length && report[offset] == CHAR_LIST_START);
+        offset++;
+
+        uint256 lastStart = offset;
+        bool itemStart = false;
+        bytes32 chr;
+
+        for (; offset < report.length; offset++) {
+            chr = report[offset];
+            if (chr == CHAR_DOUBLE_QUOTE) {
+                itemStart = !itemStart;
+                if (itemStart) {
+                    lastStart = offset + 1;
+                }
+            } else if (chr == CHAR_COMMA) {
+                require(
+                    allowedAdvisories[string(report[lastStart:lastStart + offset - lastStart - 1])] == FLAG_ALLOWED,
+                    "disallowed advisory is included"
+                );
+            } else if (chr == CHAR_LIST_END) {
+                if (offset - lastStart > 0) {
+                    require(
+                        allowedAdvisories[string(report[lastStart:lastStart + offset - lastStart - 1])] == FLAG_ALLOWED,
+                        "disallowed advisory is included"
+                    );
+                }
+                require(!itemStart, "insufficient doubleQuotes number");
+                return offset + 1;
+            }
+        }
+        revert("missing listEnd");
+    }
+
+    /**
      * @dev parseCertificate parses a given certificate.
      *      The parser expects the following structure:
      *      - `Certificate.signatureAlgorithm` must be sha256WithRSAEncryption(1.2.840.113549.1.1.11)
@@ -134,7 +266,7 @@ library AVRValidator {
      * @return notAfter is the timestamp when the certificate is expired
      */
     function parseCertificate(bytes memory cert)
-        internal
+        private
         view
         returns (bytes memory, bytes memory, bytes32 signedData, bytes memory signature, uint256 notAfter)
     {
@@ -237,139 +369,7 @@ library AVRValidator {
         );
     }
 
-    /**
-     * @dev validateAndExtractElements try to parse a given report.
-     * The parser expects the following structure(pretty printed):
-     * {
-     *   "id": "120273546145229684841731255506776325150",
-     *   "timestamp": "2022-12-01T09:49:53.473230",
-     *   "version": 4,
-     *   "advisoryURL": "https://security-center.intel.com", // optional
-     *   "advisoryIDs": [ // optional
-     *      "INTEL-SA-00219",
-     *      "INTEL-SA-00289",
-     *      "INTEL-SA-00614",
-     *      "INTEL-SA-00617",
-     *      "INTEL-SA-00477",
-     *      "INTEL-SA-00615",
-     *      "INTEL-SA-00334"
-     *   ],
-     *   "isvEnclaveQuoteStatus": "GROUP_OUT_OF_DATE",
-     *   // optional
-     *   "platformInfoBlob": "1502006504000F00000F0F020202800E0000000000000000000D00000C000000020000000000000BF1FF71C73902CC168C67B32BABE311C8DCD69AA9A065D5DA1F575FA5939FD06B43FC187CDBDF97C972CA863F96A6EA5E6BB7313B5A38E28C2D117C990CEAA9CF3A",
-     *   "isvEnclaveQuoteBody": "AgAAAPELAAALAAoAAAAAALCbZcb+Fr6JI5sV5pIlYVt2GdTw6l8Ea6v+ySKOFbzvDQ3//wKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwAAAAAAAAAHAAAAAAAAADRdEEo/Gd2j3BUnuFH3PJYMIqpCpDr30GLCEPnHnp+kAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACD1xnnferKFHD2uvYqTXdDA8iZ22kCD5xw7h38CMfOngAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABNFlyxvu2l+vFxOlwhIAe+KlPZewAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-     * }
-     *
-     * @return address of EnclaveKey
-     * @return address of Operator
-     * @return timestamp when report was attested
-     * @return mrenclave of the attested enclave
-     */
-    function validateAndExtractElements(
-        bool developmentMode,
-        bytes calldata report,
-        mapping(string => uint256) storage allowedQuoteStatuses,
-        mapping(string => uint256) storage allowedAdvisories
-    ) public view returns (address, address, uint64, bytes32) {
-        // find 'timestamp' key
-        (uint256 i, bytes memory timestamp) = consumeTimestampReportJSON(report, 0);
-        uint256 checkpoint;
-
-        // find 'version' key
-        i = consumeVersionReportJSON(report, i);
-        checkpoint = i;
-
-        // find 'isvEnclaveQuoteStatus' key
-        bytes memory status;
-        (i, status) = consumeIsvEnclaveQuoteStatusReportJSON(report, i);
-        // skip the validation for quote status and advisories if status is "OK"
-        if (!(status.length == 2 && status[0] == 0x4f && status[1] == 0x4b)) {
-            require(allowedQuoteStatuses[string(status)] == FLAG_ALLOWED, "the quote status is not allowed");
-            bytes32 h = keccak256(status);
-            if (
-                h == HASHED_GROUP_OUT_OF_DATE || h == HASHED_CONFIGURATION_NEEDED || h == HASHED_SW_HARDENING_NEEDED
-                    || h == HASHED_CONFIGURATION_AND_SW_HARDENING_NEEDED
-            ) {
-                // find 'advisoryIDs' key and validate them
-                checkpoint = consumeAdvisoryIdsReportJSON(report, checkpoint);
-                validateAdvisories(report, checkpoint, allowedAdvisories);
-            }
-        }
-
-        // find 'platformInfoBlob' key(optional)
-        i = consumePlatformInfoBlobReportJSONIfExists(report, i);
-
-        // find 'isvEnclaveQuoteBody' key
-        i = consumeIsvEnclaveQuoteBodyReportJSON(report, i);
-
-        // decode isvEnclaveQuoteBody
-        // 576 bytes is the length of the quote
-        bytes memory quoteDecoded = Base64.decode(string(report[i:i + 576]));
-
-        /**
-         * parse the quote fields as follows:
-         * https://api.trustedservices.intel.com/documents/sgx-attestation-api-spec.pdf (p.26-27)
-         */
-        uint8 attributesFlags = quoteDecoded.readUint8(96);
-        // check debug flag(0b0000_0010)
-        if (developmentMode) {
-            require(attributesFlags & uint8(2) != uint8(0), "disallowed production enclave");
-        } else {
-            require(attributesFlags & uint8(2) == uint8(0), "disallowed debug enclave");
-        }
-        uint256 attestationTime = LCPUtils.attestationTimestampToSeconds(timestamp);
-        require(attestationTime <= type(uint64).max, "timestamp is too large");
-        // report data layout
-        // |report data type: 1|enclave public key: 20|operator: 20|reserved: 23
-        // |368                |369                   |389         |409
-        require(quoteDecoded[368] == bytes1(uint8(1)), "report data type is not 1");
-        return (
-            address(quoteDecoded.readBytes20(369)),
-            address(quoteDecoded.readBytes20(389)),
-            uint64(attestationTime),
-            quoteDecoded.readBytes32(112)
-        );
-    }
-
-    function validateAdvisories(
-        bytes calldata report,
-        uint256 offset,
-        mapping(string => uint256) storage allowedAdvisories
-    ) internal view returns (uint256) {
-        require(offset < report.length && report[offset] == CHAR_LIST_START);
-        offset++;
-
-        uint256 lastStart = offset;
-        bool itemStart = false;
-        bytes32 chr;
-
-        for (; offset < report.length; offset++) {
-            chr = report[offset];
-            if (chr == CHAR_DOUBLE_QUOTE) {
-                itemStart = !itemStart;
-                if (itemStart) {
-                    lastStart = offset + 1;
-                }
-            } else if (chr == CHAR_COMMA) {
-                require(
-                    allowedAdvisories[string(report[lastStart:lastStart + offset - lastStart - 1])] == FLAG_ALLOWED,
-                    "disallowed advisory is included"
-                );
-            } else if (chr == CHAR_LIST_END) {
-                if (offset - lastStart > 0) {
-                    require(
-                        allowedAdvisories[string(report[lastStart:lastStart + offset - lastStart - 1])] == FLAG_ALLOWED,
-                        "disallowed advisory is included"
-                    );
-                }
-                require(!itemStart, "insufficient doubleQuotes number");
-                return offset + 1;
-            }
-        }
-        revert("missing listEnd");
-    }
-
-    function consumeJSONKey(bytes calldata report, uint256 i, string memory keyStr) internal pure returns (uint256) {
+    function consumeJSONKey(bytes calldata report, uint256 i, string memory keyStr) private pure returns (uint256) {
         uint256 len = bytes(keyStr).length;
         assert(len > 0 && len <= 32);
         bytes32 key = bytes32(bytes(keyStr));
@@ -391,7 +391,7 @@ library AVRValidator {
     }
 
     function consumeTimestampReportJSON(bytes calldata report, uint256 i)
-        internal
+        private
         pure
         returns (uint256, bytes memory)
     {
@@ -399,19 +399,19 @@ library AVRValidator {
         return (i + 26, report[i:i + 26]);
     }
 
-    function consumeVersionReportJSON(bytes calldata report, uint256 i) internal pure returns (uint256) {
+    function consumeVersionReportJSON(bytes calldata report, uint256 i) private pure returns (uint256) {
         i = consumeJSONKey(report, i, "version") + OFFSET_JSON_NUMBER_VALUE;
         // check if the version matches "4,"(0x34, 0x2c)
         require(bytes2(report[i:i + 2]) == bytes2(hex"342c"), "version mismatch");
         return i + 2;
     }
 
-    function consumeAdvisoryIdsReportJSON(bytes calldata report, uint256 i) internal pure returns (uint256) {
+    function consumeAdvisoryIdsReportJSON(bytes calldata report, uint256 i) private pure returns (uint256) {
         return consumeJSONKey(report, i, "advisoryIDs") + OFFSET_JSON_LIST_VALUE;
     }
 
     function consumeIsvEnclaveQuoteStatusReportJSON(bytes calldata report, uint256 i)
-        internal
+        private
         pure
         returns (uint256, bytes memory)
     {
@@ -421,7 +421,7 @@ library AVRValidator {
     }
 
     function consumePlatformInfoBlobReportJSONIfExists(bytes calldata report, uint256 i)
-        internal
+        private
         pure
         returns (uint256)
     {
@@ -440,11 +440,11 @@ library AVRValidator {
         return i + 8 + hexBytesToUint(bytes4(report[i + 4:i + 8])) * 2;
     }
 
-    function consumeIsvEnclaveQuoteBodyReportJSON(bytes calldata report, uint256 i) internal pure returns (uint256) {
+    function consumeIsvEnclaveQuoteBodyReportJSON(bytes calldata report, uint256 i) private pure returns (uint256) {
         return consumeJSONKey(report, i, "isvEnclaveQuoteBody") + OFFSET_JSON_STRING_VALUE;
     }
 
-    function hexBytesToUint(bytes4 ss) internal pure returns (uint256) {
+    function hexBytesToUint(bytes4 ss) private pure returns (uint256) {
         uint256 val = 0;
         uint8 zero = uint8(48); //0
         uint8 nine = uint8(57); //9
