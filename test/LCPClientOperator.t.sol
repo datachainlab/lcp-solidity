@@ -249,7 +249,11 @@ contract LCPClientOperatorTest is BasicTest {
             (signatures[1], signatures[2], signatures[3]) = (signatures[0], signatures[0], signatures[0]);
             UpdateOperatorsMessage.Data memory message = createUpdateOperators(nextNonce, operators, signatures, 2, 3);
             vm.expectRevert(
-                abi.encodeWithSelector(ILCPClientErrors.LCPClientOperatorSignaturesInsufficient.selector, 1)
+                abi.encodeWithSelector(
+                    ILCPClientErrors.LCPClientUpdateOperatorsSignatureUnexpectedOperator.selector,
+                    wallets[0].addr,
+                    wallets[1].addr
+                )
             );
             lc.updateOperators(clientId, message);
         }

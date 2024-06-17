@@ -52,7 +52,8 @@ interface ILCPClientErrors {
 
     error LCPClientInvalidSignaturesLength();
 
-    error LCPClientAVRUnexpectedOperator(address gotOperator, address actualOperator);
+    error LCPClientAVRUnexpectedOperator(address actual, address expected);
 
     error LCPClientUpdateOperatorsPermissionless();
+    error LCPClientUpdateOperatorsSignatureUnexpectedOperator(address actual, address expected);
 }

@@ -564,10 +564,13 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         );
         uint256 success = 0;
         for (uint256 i = 0; i < sigNum; i++) {
-            if (
-                message.signatures[i].length > 0
-                    && verifyECDSASignature(commitment, message.signatures[i], address(bytes20(clientState.operators[i])))
-            ) {
+            if (message.signatures[i].length > 0) {
+                address operator = verifyECDSASignature(commitment, message.signatures[i]);
+                if (operator != address(bytes20(clientState.operators[i]))) {
+                    revert LCPClientUpdateOperatorsSignatureUnexpectedOperator(
+                        operator, address(bytes20(clientState.operators[i]))
+                    );
+                }
                 unchecked {
                     success++;
                 }
