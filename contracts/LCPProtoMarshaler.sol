@@ -5,7 +5,8 @@ import {
     IbcLightclientsLcpV1ClientState as ClientState,
     IbcLightclientsLcpV1ConsensusState as ConsensusState,
     IbcLightclientsLcpV1RegisterEnclaveKeyMessage as RegisterEnclaveKeyMessage,
-    IbcLightclientsLcpV1UpdateClientMessage as UpdateClientMessage
+    IbcLightclientsLcpV1UpdateClientMessage as UpdateClientMessage,
+    IbcLightclientsLcpV1UpdateOperatorsMessage as UpdateOperatorsMessage
 } from "./proto/ibc/lightclients/lcp/v1/LCP.sol";
 import {GoogleProtobufAny as Any} from "@hyperledger-labs/yui-ibc-solidity/contracts/proto/GoogleProtobufAny.sol";
 
@@ -61,7 +62,7 @@ library LCPProtoMarshaler {
     }
 
     function routeClientMessage(string calldata clientId, bytes calldata protoClientMessage)
-        external
+        public
         pure
         returns (bytes32 typeUrlHash, bytes memory args)
     {
@@ -73,12 +74,15 @@ library LCPProtoMarshaler {
         } else if (typeUrlHash == REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL_HASH) {
             RegisterEnclaveKeyMessage.Data memory message = RegisterEnclaveKeyMessage.decode(anyClientMessage.value);
             return (typeUrlHash, abi.encode(clientId, message));
+        } else if (typeUrlHash == UPDATE_OPERATORS_MESSAGE_TYPE_URL_HASH) {
+            UpdateOperatorsMessage.Data memory message = UpdateOperatorsMessage.decode(anyClientMessage.value);
+            return (typeUrlHash, abi.encode(clientId, message));
         } else {
             revert("unsupported client message type");
         }
     }
 
-    function unmarshalClientState(bytes calldata bz) external pure returns (ClientState.Data memory clientState) {
+    function unmarshalClientState(bytes calldata bz) public pure returns (ClientState.Data memory clientState) {
         Any.Data memory anyClientState = Any.decode(bz);
         require(
             keccak256(abi.encodePacked(anyClientState.type_url)) == CLIENT_STATE_TYPE_URL_HASH,
@@ -88,7 +92,7 @@ library LCPProtoMarshaler {
     }
 
     function unmarshalConsensusState(bytes calldata bz)
-        external
+        public
         pure
         returns (ConsensusState.Data memory consensusState)
     {
