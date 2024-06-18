@@ -4,19 +4,25 @@ pragma solidity ^0.8.12;
 import {Height} from "@hyperledger-labs/yui-ibc-solidity/contracts/proto/Client.sol";
 
 library LCPCommitment {
-    uint16 constant LCP_MESSAGE_VERSION = 1;
-    uint16 constant LCP_MESSAGE_TYPE_UPDATE_STATE = 1;
-    uint16 constant LCP_MESSAGE_TYPE_STATE = 2;
-    uint16 constant LCP_MESSAGE_TYPE_MISBEHAVIOUR = 3;
-    uint16 constant LCP_MESSAGE_CONTEXT_TYPE_EMPTY = 0;
-    uint16 constant LCP_MESSAGE_CONTEXT_TYPE_TRUSTING_PERIOD = 1;
+    uint16 internal constant LCP_MESSAGE_VERSION = 1;
+    uint16 internal constant LCP_MESSAGE_TYPE_UPDATE_STATE = 1;
+    uint16 internal constant LCP_MESSAGE_TYPE_STATE = 2;
+    uint16 internal constant LCP_MESSAGE_TYPE_MISBEHAVIOUR = 3;
+    uint16 internal constant LCP_MESSAGE_CONTEXT_TYPE_EMPTY = 0;
+    uint16 internal constant LCP_MESSAGE_CONTEXT_TYPE_TRUSTING_PERIOD = 1;
 
-    bytes32 constant LCP_MESSAGE_HEADER_UPDATE_STATE =
+    bytes32 internal constant LCP_MESSAGE_HEADER_UPDATE_STATE =
         bytes32(uint256(LCP_MESSAGE_VERSION) << 240 | uint256(LCP_MESSAGE_TYPE_UPDATE_STATE) << 224);
-    bytes32 constant LCP_MESSAGE_HEADER_STATE =
+    bytes32 internal constant LCP_MESSAGE_HEADER_STATE =
         bytes32(uint256(LCP_MESSAGE_VERSION) << 240 | uint256(LCP_MESSAGE_TYPE_STATE) << 224);
-    bytes32 constant LCP_MESSAGE_HEADER_MISBEHAVIOUR =
+    bytes32 internal constant LCP_MESSAGE_HEADER_MISBEHAVIOUR =
         bytes32(uint256(LCP_MESSAGE_VERSION) << 240 | uint256(LCP_MESSAGE_TYPE_MISBEHAVIOUR) << 224);
+
+    error LCPCommitmentUnexpectedProxyMessageHeader();
+    error LCPCommtimentInvalidTrustingPeriodContextLength();
+    error LCPCommitmentUnknownValidationContextType();
+    error LCPCommtimentTrustingPeriodContextOutOfTrustingPeriod();
+    error LCPCommitmentTrustingPeriodHeaderFromFuture();
 
     struct HeaderedProxyMessage {
         bytes32 header;
@@ -48,7 +54,9 @@ library LCPCommitment {
         // 0-1:  version
         // 2-3:  message type
         // 4-31: reserved
-        require(hm.header == LCP_MESSAGE_HEADER_UPDATE_STATE, "unexpected header");
+        if (hm.header != LCP_MESSAGE_HEADER_UPDATE_STATE) {
+            revert LCPCommitmentUnexpectedProxyMessageHeader();
+        }
         return abi.decode(hm.message, (UpdateStateProxyMessage));
     }
 
@@ -73,7 +81,9 @@ library LCPCommitment {
         // 0-1:  version
         // 2-3:  message type
         // 4-31: reserved
-        require(hm.header == LCP_MESSAGE_HEADER_MISBEHAVIOUR, "unexpected header");
+        if (hm.header != LCP_MESSAGE_HEADER_MISBEHAVIOUR) {
+            revert LCPCommitmentUnexpectedProxyMessageHeader();
+        }
         return abi.decode(hm.message, (MisbehaviourProxyMessage));
     }
 
@@ -109,10 +119,12 @@ library LCPCommitment {
         if (contextType == LCP_MESSAGE_CONTEXT_TYPE_EMPTY) {
             return;
         } else if (contextType == LCP_MESSAGE_CONTEXT_TYPE_TRUSTING_PERIOD) {
-            require(vc.context.length == 64, "invalid trusting period context length");
+            if (vc.context.length != 64) {
+                revert LCPCommtimentInvalidTrustingPeriodContextLength();
+            }
             return trustingPeriodContextEval(parseTrustingPeriodContext(vc.context), currentTimestampNanos);
         } else {
-            revert("unknown context type");
+            revert LCPCommitmentUnknownValidationContextType();
         }
     }
 
@@ -138,17 +150,16 @@ library LCPCommitment {
         pure
     {
         if (currentTimestampNanos >= context.trustedStateTimestamp + context.trustingPeriod) {
-            require(false, "out of trusting period");
+            revert LCPCommtimentTrustingPeriodContextOutOfTrustingPeriod();
         } else if (currentTimestampNanos + context.clockDrift <= context.untrustedHeaderTimestamp) {
-            require(false, "header is from the future");
+            revert LCPCommitmentTrustingPeriodHeaderFromFuture();
         }
         return;
     }
 
-    struct CommitmentProof {
+    struct CommitmentProofs {
         bytes message;
-        address signer;
-        bytes signature;
+        bytes[] signatures;
     }
 
     struct VerifyMembershipProxyMessage {
@@ -169,16 +180,18 @@ library LCPCommitment {
         // 0-1:  version
         // 2-3:  message type
         // 4-31: reserved
-        require(hm.header == LCP_MESSAGE_HEADER_STATE, "unexpected header");
+        if (hm.header != LCP_MESSAGE_HEADER_STATE) {
+            revert LCPCommitmentUnexpectedProxyMessageHeader();
+        }
         return abi.decode(hm.message, (VerifyMembershipProxyMessage));
     }
 
-    function parseVerifyMembershipCommitmentProof(bytes calldata commitmentProofBytes)
+    function parseVerifyMembershipCommitmentProofs(bytes calldata commitmentProofsBytes)
         internal
         pure
-        returns (CommitmentProof memory, VerifyMembershipProxyMessage memory)
+        returns (CommitmentProofs memory, VerifyMembershipProxyMessage memory)
     {
-        CommitmentProof memory commitmentProof = abi.decode(commitmentProofBytes, (CommitmentProof));
-        return (commitmentProof, parseVerifyMembershipProxyMessage(commitmentProof.message));
+        CommitmentProofs memory commitmentProofs = abi.decode(commitmentProofsBytes, (CommitmentProofs));
+        return (commitmentProofs, parseVerifyMembershipProxyMessage(commitmentProofs.message));
     }
 }

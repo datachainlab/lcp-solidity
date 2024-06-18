@@ -9,46 +9,43 @@ import "./TestHelper.t.sol";
 contract ReportTest is BasicTest {
     struct TestCase {
         string path;
-        address addr;
-        string timestamp;
         bool verifyError;
+        address enclaveKey;
+        address operator;
     }
 
-    mapping(string => uint256) internal allowedQuoteStatuses;
-    mapping(string => uint256) internal allowedAdvisories;
+    AVRValidator.ReportAllowedStatus internal allowedStatuses;
 
     mapping(string => uint256) internal allowedAdvisoriesForValidateAdvisories;
 
     TestCase[] internal cases;
 
     function setUp() public {
-        // TODO add more cases
-
         // valid cases
         cases.push(
             TestCase({
-                path: "./test/data/reports/valid/avr-01",
-                addr: 0x4D165CB1BEEDA5fAF1713A5C212007be2a53D97B,
-                timestamp: "2022-12-01T09:49:53.473230",
-                verifyError: false
+                path: "./test/data/reports/valid/001-avr",
+                verifyError: false,
+                enclaveKey: 0x836Fec0cC99Ed0242ed02fBAAb648652B2372E41,
+                operator: address(0)
             })
         );
         cases.push(
             TestCase({
-                path: "./test/data/reports/valid/avr-02",
-                addr: 0xa3ED9460b7C564Ca7487c0CD2DD5584a1C76f5Fa,
-                timestamp: "2022-12-05T02:01:12.282060",
-                verifyError: false
+                path: "./test/data/reports/valid/002-avr",
+                verifyError: false,
+                enclaveKey: 0xC9f79d5de52dbe84120055FF286642C5c328466e,
+                operator: 0xcb96F8d6C2d543102184d679D7829b39434E4EEc
             })
         );
 
         // invalid cases
         cases.push(
             TestCase({
-                path: "./test/data/reports/invalid/avr-01",
-                addr: address(0),
-                timestamp: "2022-12-01T09:49:53.473230",
-                verifyError: true
+                path: "./test/data/reports/invalid/001-avr",
+                verifyError: true,
+                enclaveKey: address(0),
+                operator: address(0)
             })
         );
     }
@@ -80,9 +77,10 @@ contract ReportTest is BasicTest {
             } else {
                 require(ok, "failed to verify report");
             }
-            (address signer,,) =
-                AVRValidator.validateAndExtractElements(true, report, allowedQuoteStatuses, allowedAdvisories);
-            require(c.addr == signer, "unexpected signer");
+            AVRValidator.ReportExtractedElements memory reElem =
+                AVRValidator.validateAndExtractElements(true, report, allowedStatuses);
+            require(c.enclaveKey == reElem.enclaveKey, "enclave key mismatch");
+            require(c.operator == reElem.operator, "operator mismatch");
         }
     }
 
@@ -93,22 +91,11 @@ contract ReportTest is BasicTest {
                 continue;
             }
             bytes memory report = readReport(c.path);
-            try AVRValidator.validateAndExtractElements(false, report, allowedQuoteStatuses, allowedAdvisories)
-            returns (address, bytes memory, bytes32) {
-                require(false, "An AVR for debug enclave must be disallowed");
+            try AVRValidator.validateAndExtractElements(false, report, allowedStatuses) returns (
+                AVRValidator.ReportExtractedElements memory
+            ) {
+                revert("An AVR for debug enclave must be disallowed");
             } catch (bytes memory) {}
-        }
-    }
-
-    function testTimestampParsing() public view {
-        // TODO add tests for DateUtils
-        for (uint256 i = 0; i < cases.length; i++) {
-            TestCase storage c = cases[i];
-            if (c.verifyError) {
-                continue;
-            }
-            uint256 timestamp = TestLCPUtils.attestationTimestampToSeconds(bytes(c.timestamp));
-            console.log(timestamp);
         }
     }
 
@@ -139,9 +126,9 @@ contract ReportTest is BasicTest {
     }
 
     function initAllowedStatusAdvisories(string memory quoteStatus, string[] memory advisories) internal {
-        allowedQuoteStatuses[quoteStatus] = AVRValidator.FLAG_ALLOWED;
+        allowedStatuses.allowedQuoteStatuses[quoteStatus] = AVRValidator.FLAG_ALLOWED;
         for (uint256 i = 0; i < advisories.length; i++) {
-            allowedAdvisories[advisories[i]] = AVRValidator.FLAG_ALLOWED;
+            allowedStatuses.allowedAdvisories[advisories[i]] = AVRValidator.FLAG_ALLOWED;
         }
     }
 

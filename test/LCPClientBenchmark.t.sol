@@ -12,30 +12,37 @@ import {
 } from "../contracts/proto/ibc/lightclients/lcp/v1/LCP.sol";
 import {LCPProtoMarshaler} from "../contracts/LCPProtoMarshaler.sol";
 import {IBCHeight} from "@hyperledger-labs/yui-ibc-solidity/contracts/core/02-client/IBCHeight.sol";
+import {LCPOperator} from "../contracts/LCPOperator.sol";
 
 abstract contract BaseLCPClientBenchmark is BasicTest {
     string internal constant commandAvrFile = "test/data/client/02/001-avr";
     string internal constant rootCAFile = "test/data/certs/simulation_rootca.der";
     string internal constant commandResultSuffix = "_result";
 
+    uint256 internal immutable testOperatorPrivKey;
+    address internal immutable testOperator;
+
     BLCPClient lc;
     string clientId;
+
+    constructor() {
+        (testOperator, testOperatorPrivKey) = makeAddrAndKey("alice");
+    }
 
     function createLCContract() internal returns (BLCPClient) {
         return new BLCPClient(address(this), true, vm.readFileBinary(rootCAFile));
     }
 
     function createClient() internal {
-        ClientState.Data memory clientState = createInitialState(commandAvrFile);
+        ClientState.Data memory clientState = createInitialState(commandAvrFile, testOperator);
         ConsensusState.Data memory consensusState;
         lc.initializeClient(clientId, LCPProtoMarshaler.marshal(clientState), LCPProtoMarshaler.marshal(consensusState));
     }
 
-    function generateClientId(uint64 clientCounter) internal pure returns (string memory) {
-        return string(abi.encodePacked("lcp-", Strings.toString(clientCounter)));
-    }
-
-    function createInitialState(string memory avrFile) internal returns (ClientState.Data memory clientState) {
+    function createInitialState(string memory avrFile, address operator)
+        internal
+        returns (ClientState.Data memory clientState)
+    {
         bytes memory mrenclave = readDecodedBytes(avrFile, ".mrenclave");
         require(mrenclave.length == 32, "the length must be 32");
 
@@ -43,6 +50,12 @@ abstract contract BaseLCPClientBenchmark is BasicTest {
         clientState.mrenclave = mrenclave;
         clientState.key_expiration = 60 * 60 * 24 * 7;
         clientState.frozen = false;
+
+        clientState.operators = new bytes[](1);
+        clientState.operators[0] = abi.encodePacked(operator);
+        clientState.operators_nonce = 0;
+        clientState.operators_threshold_numerator = 1;
+        clientState.operators_threshold_denominator = 1;
 
         // WARNING: the following configuration is for testing purpose only
         clientState.allowed_quote_statuses = new string[](1);
@@ -54,9 +67,13 @@ abstract contract BaseLCPClientBenchmark is BasicTest {
         internal
         returns (RegisterEnclaveKeyMessage.Data memory message)
     {
-        message.report = string(readJSON(avrFile, ".avr"));
+        message.report = readJSON(avrFile, ".avr");
         message.signature = readDecodedBytes(avrFile, ".signature");
         message.signing_cert = readDecodedBytes(avrFile, ".signing_cert");
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            testOperatorPrivKey, keccak256(LCPOperatorTestHelper.computeEIP712RegisterEnclaveKey(message.report))
+        );
+        message.operator_signature = abi.encodePacked(r, s, v);
     }
 
     function createUpdateClientMessage(string memory updateClientFilePrefix)
@@ -65,9 +82,8 @@ abstract contract BaseLCPClientBenchmark is BasicTest {
     {
         message.proxy_message =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".message");
-        message.signer =
-            readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".signer");
-        message.signature =
+        message.signatures = new bytes[](1);
+        message.signatures[0] =
             readDecodedBytes(string(abi.encodePacked(updateClientFilePrefix, commandResultSuffix)), ".signature");
     }
 }
@@ -120,9 +136,21 @@ contract CachedEnclaveRegistrationBenchmark is BaseLCPClientBenchmark {
     }
 }
 
-contract UpdateClientBenchmark is BaseLCPClientBenchmark {
+contract CreateClientBenchmark is BaseLCPClientBenchmark {
     function setUp() public {
         vm.warp(1703138378);
+        lc = createLCContract();
+        clientId = generateClientId(1);
+    }
+
+    function testCreateClient() public {
+        createClient();
+    }
+}
+
+contract UpdateClientBenchmark is BaseLCPClientBenchmark {
+    function setUp() public {
+        vm.warp(1718461269);
         lc = createLCContract();
         clientId = generateClientId(1);
         createClient();
@@ -130,13 +158,13 @@ contract UpdateClientBenchmark is BaseLCPClientBenchmark {
         Height.Data[] memory heights = lc.registerEnclaveKey(clientId, createRegisterEnclaveKeyMessage(commandAvrFile));
         require(heights.length == 0);
 
-        heights = lc.updateClient(clientId, createUpdateClientMessage("test/data/client/02/004-update_client"));
+        heights = lc.updateClient(clientId, createUpdateClientMessage("test/data/client/02/003-update_client"));
         require(heights.length == 1, "heights length must be 1");
     }
 
     function testUpdateClient() public {
         Height.Data[] memory heights =
-            lc.updateClient(clientId, createUpdateClientMessage("test/data/client/02/007-update_client"));
+            lc.updateClient(clientId, createUpdateClientMessage("test/data/client/02/005-update_client"));
         require(heights.length == 1, "heights length must be 1");
     }
 }
