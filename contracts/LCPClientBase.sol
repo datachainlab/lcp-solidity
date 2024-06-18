@@ -328,7 +328,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
      */
     function getClientState(string calldata clientId) public view returns (bytes memory clientStateBytes, bool) {
         ProtoClientState.Data storage clientState = clientStorages[clientId].clientState;
-        if (clientState.latest_height.revision_height == 0) {
+        if (clientState.mrenclave.length == 0) {
             return (clientStateBytes, false);
         }
         return (LCPProtoMarshaler.marshal(clientState), true);
