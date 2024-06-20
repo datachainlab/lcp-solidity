@@ -32,5 +32,13 @@ $ ./target/release/lcp-cgen \
     --signing_key=${LCP_PATH}/tests/certs/signing.key \
     --enclave=${LCP_PATH}/bin/enclave.signed.so \
     --out=/path/to/testdatadir \
-    --commands wait_blocks:1 update_client verify_channel wait_blocks:1 update_client verify_packet
+    --eknum=1 \
+    --commands \
+        wait_blocks:1 \
+        update_client:0 \
+        verify_channel:0 \
+        wait_blocks:1 \
+        update_client:0 \
+        verify_packet:0 \
+        verify_packet_receipt_absence:0
 ```
