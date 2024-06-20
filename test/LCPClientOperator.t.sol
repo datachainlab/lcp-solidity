@@ -18,7 +18,6 @@ import {LCPOperator} from "../contracts/LCPOperator.sol";
 contract LCPClientOperatorTest is BasicTest {
     using IBCHeight for Height.Data;
 
-    string internal constant commandAvrFile = "test/data/client/03/001-avr";
     string internal constant commandResultSuffix = "_result";
 
     LCPClient lc;
@@ -28,9 +27,7 @@ contract LCPClientOperatorTest is BasicTest {
         lc = new LCPClient(address(this), true, vm.readFileBinary("./test/data/certs/simulation_rootca.der"));
     }
 
-    function avr(string memory filename) internal pure returns (string memory) {
-        return string(abi.encodePacked("test/data/client/03/", filename));
-    }
+    // ---------------------------- Test Cases ----------------------------
 
     function testPreComputationValues() public pure {
         assertEq(LCPOperator.domainSeparatorUniversal(), LCPOperator.DOMAIN_SEPARATOR_REGISTER_ENCLAVE_KEY);
@@ -97,7 +94,7 @@ contract LCPClientOperatorTest is BasicTest {
         }
         string memory clientId = generateClientId(1);
         {
-            ClientState.Data memory clientState = createInitialState(commandAvrFile, operators, 2, 3);
+            ClientState.Data memory clientState = createInitialState(avr("001-avr"), operators, 2, 3);
             ConsensusState.Data memory consensusState;
             Height.Data memory height = lc.initializeClient(
                 clientId, LCPProtoMarshaler.marshal(clientState), LCPProtoMarshaler.marshal(consensusState)
@@ -167,7 +164,7 @@ contract LCPClientOperatorTest is BasicTest {
         }
         string memory clientId = generateClientId(1);
         {
-            ClientState.Data memory clientState = createInitialState(commandAvrFile, operators, 2, 3);
+            ClientState.Data memory clientState = createInitialState(avr("001-avr"), operators, 2, 3);
             ConsensusState.Data memory consensusState;
             Height.Data memory height = lc.initializeClient(
                 clientId, LCPProtoMarshaler.marshal(clientState), LCPProtoMarshaler.marshal(consensusState)
@@ -290,6 +287,63 @@ contract LCPClientOperatorTest is BasicTest {
         }
     }
 
+    function testRegisterEnclaveKeyOperatorDedicatedAVR() public {
+        Vm.Wallet[] memory wallets = createWallets(2);
+        address[] memory operators = new address[](1);
+        operators[0] = wallets[0].addr;
+        string memory avrFile = "test/data/reports/valid/operator_0xc1eae5EF781f4EE5867eC6725630E7dC17fa3436";
+
+        {
+            string memory clientId = generateClientId(1);
+            ClientState.Data memory clientState = createInitialState(avrFile, operators, 1, 1);
+            ConsensusState.Data memory consensusState;
+            lc.initializeClient(
+                clientId, LCPProtoMarshaler.marshal(clientState), LCPProtoMarshaler.marshal(consensusState)
+            );
+            // operator matches the operator address in the AVR
+            lc.registerEnclaveKey(clientId, createRegisterEnclaveKeyMessage(avrFile, wallets[0].privateKey));
+        }
+        {
+            string memory clientId = generateClientId(2);
+            ClientState.Data memory clientState = createInitialState(avrFile, operators, 1, 1);
+            ConsensusState.Data memory consensusState;
+            lc.initializeClient(
+                clientId, LCPProtoMarshaler.marshal(clientState), LCPProtoMarshaler.marshal(consensusState)
+            );
+
+            // operator does not match the operator address in the AVR
+            RegisterEnclaveKeyMessage.Data memory msg_ = createRegisterEnclaveKeyMessage(avrFile, wallets[1].privateKey);
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    ILCPClientErrors.LCPClientAVRUnexpectedOperator.selector, wallets[1].addr, wallets[0].addr
+                )
+            );
+            lc.registerEnclaveKey(clientId, msg_);
+        }
+        {
+            string memory clientId = generateClientId(3);
+            ClientState.Data memory clientState = createInitialState(avrFile, operators, 1, 1);
+            ConsensusState.Data memory consensusState;
+            lc.initializeClient(
+                clientId, LCPProtoMarshaler.marshal(clientState), LCPProtoMarshaler.marshal(consensusState)
+            );
+            // an operator dedicated AVR does not allow an empty signature
+            RegisterEnclaveKeyMessage.Data memory msg_ = createRegisterEnclaveKeyMessage(avrFile, 0);
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    ILCPClientErrors.LCPClientAVRUnexpectedOperator.selector, address(0), wallets[0].addr
+                )
+            );
+            lc.registerEnclaveKey(clientId, msg_);
+        }
+    }
+
+    // ---------------------------- Helper Functions ----------------------------
+
+    function avr(string memory filename) internal pure returns (string memory) {
+        return string(abi.encodePacked("test/data/client/03/", filename));
+    }
+
     function generateSignature(Vm.Wallet memory wallet, bytes32 commitment, bool valid)
         internal
         pure
@@ -363,9 +417,11 @@ contract LCPClientOperatorTest is BasicTest {
         message.report = readJSON(avrFile, ".avr");
         message.signature = readDecodedBytes(avrFile, ".signature");
         message.signing_cert = readDecodedBytes(avrFile, ".signing_cert");
-        (uint8 v, bytes32 r, bytes32 s) =
-            vm.sign(privateKey, keccak256(LCPOperatorTestHelper.computeEIP712RegisterEnclaveKey(message.report)));
-        message.operator_signature = abi.encodePacked(r, s, v);
+        if (privateKey != 0) {
+            (uint8 v, bytes32 r, bytes32 s) =
+                vm.sign(privateKey, keccak256(LCPOperatorTestHelper.computeEIP712RegisterEnclaveKey(message.report)));
+            message.operator_signature = abi.encodePacked(r, s, v);
+        }
     }
 
     function createUpdateClientMessage(string memory updateClientFilePrefix)
