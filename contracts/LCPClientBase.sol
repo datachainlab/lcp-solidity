@@ -497,9 +497,9 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
             operator = verifyECDSASignature(
                 keccak256(LCPOperator.computeEIP712RegisterEnclaveKey(message.report)), message.operator_signature
             );
-            if (reElems.operator != address(0) && reElems.operator != operator) {
-                revert LCPClientAVRUnexpectedOperator(operator, reElems.operator);
-            }
+        }
+        if (reElems.operator != address(0) && reElems.operator != operator) {
+            revert LCPClientAVRUnexpectedOperator(operator, reElems.operator);
         }
         uint64 expiredAt = reElems.attestationTime + clientStorage.clientState.key_expiration;
         if (expiredAt <= block.timestamp) {
