@@ -1,5 +1,6 @@
-SOLC_VERSION ?= 0.8.20
-FORGE ?= forge
+SOLC_VERSION=0.8.20
+FORGE=forge
+TEST_UPGRADEABLE=false
 
 .PHONY: proto-sol
 proto-sol:
@@ -9,9 +10,13 @@ else
 	./solpb.sh
 endif
 
+.PHONY: clean
+clean:
+	@$(FORGE) clean
+
 .PHONY: test
 test:
-	@$(FORGE) test -vvvv --gas-report --ffi --use solc:$(SOLC_VERSION)
+	@TEST_UPGRADEABLE=$(TEST_UPGRADEABLE) $(FORGE) test -vvvv --gas-report --ffi --use solc:$(SOLC_VERSION)
 
 .PHONY: coverage
 coverage:

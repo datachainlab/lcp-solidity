@@ -48,8 +48,11 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
 
     // --------------------- Immutable fields ---------------------
 
+    /// @dev ibcHandler is the address of the IBC handler contract.
+    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
     address internal immutable ibcHandler;
-    // if developmentMode is true, the client allows the remote attestation of IAS in development.
+    /// @dev if developmentMode is true, the client allows the remote attestation of IAS in development.
+    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
     bool internal immutable developmentMode;
 
     // --------------------- Storage fields ---------------------
@@ -63,6 +66,9 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
 
     // --------------------- Constructor ---------------------
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    /// @param ibcHandler_ the address of the IBC handler contract
+    /// @param developmentMode_ if true, the client allows the enclave debug mode
     constructor(address ibcHandler_, bool developmentMode_) {
         ibcHandler = ibcHandler_;
         developmentMode = developmentMode_;
@@ -77,7 +83,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
 
     // --------------------- Public methods ---------------------
 
-    /// @dev isDevelopmentMode returns true if the client allows the remote attestation of IAS in development.
+    /// @dev isDevelopmentMode returns true if the client allows the enclave debug mode.
     function isDevelopmentMode() public view returns (bool) {
         return developmentMode;
     }
