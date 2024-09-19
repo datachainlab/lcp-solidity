@@ -4,13 +4,15 @@
   "description": "LCP Client in Solidity",
   "dependencies": {
     "@openzeppelin/contracts": "^5.0.1",
-    "@hyperledger-labs/yui-ibc-solidity": "git+https://github.com/hyperledger-labs/yui-ibc-solidity.git#v0.3.29",
+    "@openzeppelin/contracts-upgradeable": "^5.0.1",
+    "@hyperledger-labs/yui-ibc-solidity": "git+https://github.com/hyperledger-labs/yui-ibc-solidity.git#semver:v0.3.37",
     "base64": "git+https://github.com/datachainlab/base64.git#4d85607b18d981acff392d2e99ba654305552a97",
     "solidity-datetime": "git+https://github.com/datachainlab/solidity-datetime.git#294fc244973cc5f9ec374713affde12c1403927c",
     "@ensdomains/ens-contracts": "1.1.4"
   },
   "devDependencies": {
-    "solhint": "^5.0.0"
+    "solhint": "^5.0.0",
+    "@openzeppelin/upgrades-core": "^1.32.3"
   },
   "license": "Apache-2.0"
 }
