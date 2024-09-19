@@ -60,9 +60,9 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
     mapping(string => ClientStorage) internal clientStorages;
 
     // rootCA's public key parameters
-    AVRValidator.RSAParams public verifiedRootCAParams;
+    AVRValidator.RSAParams internal verifiedRootCAParams;
     // keccak256(signingCert) => RSAParams of signing public key
-    mapping(bytes32 => AVRValidator.RSAParams) public verifiedSigningRSAParams;
+    mapping(bytes32 => AVRValidator.RSAParams) internal verifiedSigningRSAParams;
 
     // --------------------- Constructor ---------------------
 

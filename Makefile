@@ -2,13 +2,9 @@ SOLC_VERSION=0.8.20
 FORGE=forge
 TEST_UPGRADEABLE=false
 
-.PHONY: proto-sol
-proto-sol:
-ifndef SOLPB_DIR
-	$(error SOLPB_DIR is not specified)
-else
-	./solpb.sh
-endif
+.PHONY: build
+build:
+	@FOUNDRY_PROFILE=ir $(FORGE) build --sizes --skip test --use solc:$(SOLC_VERSION)
 
 .PHONY: clean
 clean:
@@ -36,3 +32,11 @@ check-fmt:
 lint:
 	@npx solhint 'contracts/*.sol'
 	@$(MAKE) FORGE_FMT_OPTS=--check fmt
+
+.PHONY: proto-sol
+proto-sol:
+ifndef SOLPB_DIR
+	$(error SOLPB_DIR is not specified)
+else
+	./solpb.sh
+endif

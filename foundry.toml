@@ -10,3 +10,6 @@ ast = true
 build_info = true
 extra_output = ["storageLayout"]
 fs_permissions = [{ access = "read", path = "./"}]
+
+[profile.ir]
+via-ir = true
