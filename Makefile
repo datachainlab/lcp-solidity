@@ -13,6 +13,10 @@ endif
 test:
 	@$(FORGE) test -vvvv --gas-report --ffi --use solc:$(SOLC_VERSION)
 
+.PHONY: coverage
+coverage:
+	@$(FORGE) coverage --ffi --use solc:$(SOLC_VERSION)
+
 .PHONY: fmt
 fmt:
 	@$(FORGE) fmt $(FORGE_FMT_OPTS) \
