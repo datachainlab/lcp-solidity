@@ -1,5 +1,6 @@
 SOLC_VERSION=0.8.20
 FORGE=forge
+SLITHER=slither
 TEST_UPGRADEABLE=false
 
 .PHONY: build
@@ -17,6 +18,10 @@ test:
 .PHONY: coverage
 coverage:
 	@$(FORGE) coverage --ffi --use solc:$(SOLC_VERSION)
+
+.PHONY: slither
+slither:
+	@$(SLITHER) .
 
 .PHONY: fmt
 fmt:
