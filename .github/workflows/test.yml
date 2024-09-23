@@ -36,3 +36,16 @@ jobs:
 
     - name: Lint
       run: make lint
+
+  slither:
+    name: Slither analysis
+    needs: contract-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: crytic/slither-action@v0.4.0
+        with:
+          node-version: 20.13
+          slither-version: 0.10.1
