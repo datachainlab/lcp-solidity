@@ -108,12 +108,20 @@ library LCPCommitmentTestHelper {
         LCPCommitment.trustingPeriodContextEval(context, currentTimestampNanos);
     }
 
-    function parseUpdateStateProxyMessage(bytes calldata commitmentBytes)
+    function parseUpdateStateProxyMessage(bytes calldata messageBytes)
         public
         pure
-        returns (LCPCommitment.UpdateStateProxyMessage memory commitment)
+        returns (LCPCommitment.UpdateStateProxyMessage memory)
     {
-        return LCPCommitment.parseUpdateStateProxyMessage(commitmentBytes);
+        LCPCommitment.HeaderedProxyMessage memory hm = abi.decode(messageBytes, (LCPCommitment.HeaderedProxyMessage));
+        // MSB first
+        // 0-1:  version
+        // 2-3:  message type
+        // 4-31: reserved
+        if (hm.header != LCPCommitment.LCP_MESSAGE_HEADER_UPDATE_STATE) {
+            revert LCPCommitment.LCPCommitmentUnexpectedProxyMessageHeader();
+        }
+        return abi.decode(hm.message, (LCPCommitment.UpdateStateProxyMessage));
     }
 
     function parseVerifyMembershipCommitmentProofs(bytes calldata proofBytes)
@@ -129,7 +137,15 @@ library LCPCommitmentTestHelper {
         pure
         returns (LCPCommitment.MisbehaviourProxyMessage memory)
     {
-        return LCPCommitment.parseMisbehaviourProxyMessage(messageBytes);
+        LCPCommitment.HeaderedProxyMessage memory hm = abi.decode(messageBytes, (LCPCommitment.HeaderedProxyMessage));
+        // MSB first
+        // 0-1:  version
+        // 2-3:  message type
+        // 4-31: reserved
+        if (hm.header != LCPCommitment.LCP_MESSAGE_HEADER_MISBEHAVIOUR) {
+            revert LCPCommitment.LCPCommitmentUnexpectedProxyMessageHeader();
+        }
+        return abi.decode(hm.message, (LCPCommitment.MisbehaviourProxyMessage));
     }
 }
 

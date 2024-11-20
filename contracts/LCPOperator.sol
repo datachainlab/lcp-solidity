@@ -21,10 +21,12 @@ library LCPOperator {
     // chainTypeSalt(CHAIN_TYPE_EVM, hex"")
     bytes32 internal constant CHAIN_TYPE_EVM_SALT = keccak256(abi.encodePacked(CHAIN_TYPE_EVM, hex""));
 
+    // slither-disable-next-line dead-code
     function chainTypeSalt(ChainType chainType, bytes memory args) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked(chainType, args));
     }
 
+    // slither-disable-next-line dead-code
     function domainSeparatorUniversal() internal pure returns (bytes32) {
         return keccak256(
             abi.encode(

@@ -55,6 +55,7 @@ library NodePtr {
     }
 }
 
+// slither-disable-start dead-code
 library Asn1Decode {
     using NodePtr for uint256;
     using BytesUtils for bytes;
@@ -226,3 +227,4 @@ library Asn1Decode {
         return NodePtr.getPtr(ix, ixFirstContentByte, ixLastContentByte);
     }
 }
+// slither-disable-end dead-code
