@@ -200,6 +200,10 @@ library AVRValidator {
                 // find 'advisoryIDs' key and validate them
                 checkpoint = consumeAdvisoryIdsReportJSON(report, checkpoint);
                 validateAdvisories(report, checkpoint, allowedStatus.allowedAdvisories);
+            } else {
+                // NO-OP
+                // Since other statuses do not have `advisoryIDs` field, skip the validation here
+                // NOTE: In production, `allowedQuoteStatuses` should not allow these statuses
             }
         }
 
