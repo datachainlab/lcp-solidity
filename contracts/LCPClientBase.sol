@@ -100,7 +100,8 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
     /**
      * @dev initializeClient initializes a new client with the given state.
      *      If succeeded, it returns heights at which the consensus state are stored.
-     *      The function must be only called by IBCHandler.
+     *      This function is guaranteed by the IBC contract to be called only once for each `clientId`.
+     * @param clientId the client identifier which is unique within the IBC handler
      */
     function initializeClient(
         string calldata clientId,
@@ -433,16 +434,22 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
 
         LCPCommitment.validationContextEval(pmsg.context, block.timestamp * 1e9);
 
-        uint128 latestHeight = clientState.latest_height.toUint128();
         uint128 postHeight = pmsg.postHeight.toUint128();
-        if (latestHeight < postHeight) {
-            clientState.latest_height = pmsg.postHeight;
-        }
-
         consensusState = clientStorage.consensusStates[postHeight];
+        if (consensusState.stateId != bytes32(0)) {
+            if (consensusState.stateId != pmsg.postStateId || consensusState.timestamp != uint64(pmsg.timestamp)) {
+                revert LCPClientUpdateStateInconsistentConsensusState();
+            }
+            // return empty heights if the consensus state is already stored
+            return heights;
+        }
         consensusState.stateId = pmsg.postStateId;
         consensusState.timestamp = uint64(pmsg.timestamp);
 
+        uint128 latestHeight = clientState.latest_height.toUint128();
+        if (latestHeight < postHeight) {
+            clientState.latest_height = pmsg.postHeight;
+        }
         heights = new Height.Data[](1);
         heights[0] = pmsg.postHeight;
         return heights;
