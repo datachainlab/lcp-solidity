@@ -263,13 +263,13 @@ library AVRValidator {
                 }
             } else if (chr == CHAR_COMMA) {
                 require(
-                    allowedAdvisories[string(report[lastStart:lastStart + offset - lastStart - 1])] == FLAG_ALLOWED,
+                    allowedAdvisories[string(report[lastStart:offset - 1])] == FLAG_ALLOWED,
                     "disallowed advisory is included"
                 );
             } else if (chr == CHAR_LIST_END) {
                 if (offset - lastStart > 0) {
                     require(
-                        allowedAdvisories[string(report[lastStart:lastStart + offset - lastStart - 1])] == FLAG_ALLOWED,
+                        allowedAdvisories[string(report[lastStart:offset - 1])] == FLAG_ALLOWED,
                         "disallowed advisory is included"
                     );
                 }
