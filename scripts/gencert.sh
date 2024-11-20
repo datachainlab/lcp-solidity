@@ -1,7 +1,6 @@
 #!/bin/env bash
 set -eu
 
-out_certs_dir=./test/.tmp/testcerts
 signing_rsa_bits=2048
 signing_exponent=65537
 
@@ -41,23 +40,24 @@ function gen_ecdsa_signing_cert() {
 }
 
 function usage() {
-    echo "Usage: $0 {gen_rsa_root_cert|gen_rsa_signing_cert|gen_ecdsa_root_cert|gen_ecdsa_signing_cert}"
+    echo "Usage: $0 <out_certs_dir> {gen_rsa_root_cert|gen_rsa_signing_cert|gen_ecdsa_root_cert|gen_ecdsa_signing_cert}"
     exit 1
 }
 
-if [ $# -eq 0 ]; then
+if [ $# -lt 2 ]; then
     usage
 fi
 
+out_certs_dir=$1
 mkdir -p ${out_certs_dir}
 
-case "$1" in
+case "$2" in
     "gen_rsa_root_cert")
         gen_rsa_root_cert
         ;;
     "gen_rsa_signing_cert")
-        signing_rsa_bits=$2
-        signing_exponent=$3
+        signing_rsa_bits=$3
+        signing_exponent=$4
         gen_rsa_signing_cert
         ;;
     "gen_ecdsa_root_cert")

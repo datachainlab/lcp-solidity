@@ -71,7 +71,7 @@ contract CertificateTest is BasicTest {
         );
     }
 
-    string internal constant testCertsDir = "./test/.tmp/testcerts";
+    string internal constant testCertsBaseDir = "./test/.tmp/testcerts";
     string internal constant genCertCmd = "./scripts/gencert.sh";
 
     struct RSAParamsCase {
@@ -80,6 +80,7 @@ contract CertificateTest is BasicTest {
     }
 
     function testValidSigningCerts() public {
+        string memory testCertsDir = string(abi.encodePacked(testCertsBaseDir, "/", "valid_signing_certs"));
         RSAParamsCase[4] memory cases = [
             RSAParamsCase("2048", "65537"),
             RSAParamsCase("2048", "3"),
@@ -87,10 +88,10 @@ contract CertificateTest is BasicTest {
             RSAParamsCase("4096", "3")
         ];
         vm.warp(1795167418);
-        cleanupTestCerts();
-        genRsaRootCert();
+        cleanupTestCerts(testCertsDir);
+        genRsaRootCert(testCertsDir);
         for (uint256 i = 0; i < cases.length; i++) {
-            genRsaSigningCert(cases[i].bits, cases[i].exponent);
+            genRsaSigningCert(testCertsDir, cases[i].bits, cases[i].exponent);
             AVRValidator.RSAParams memory rootParams = AVRValidator.verifyRootCACert(
                 vm.readFileBinary(string(abi.encodePacked(testCertsDir, "/root.crt.der")))
             );
@@ -103,19 +104,21 @@ contract CertificateTest is BasicTest {
     }
 
     function testInvalidRootCerts() public {
+        string memory testCertsDir = string(abi.encodePacked(testCertsBaseDir, "/", "invalid_root_certs"));
         vm.warp(1795167418);
-        cleanupTestCerts();
-        genEcdsaRootCert();
+        cleanupTestCerts(testCertsDir);
+        genEcdsaRootCert(testCertsDir);
 
         vm.expectRevert();
         AVRValidator.verifyRootCACert(vm.readFileBinary(string(abi.encodePacked(testCertsDir, "/root.crt.der"))));
     }
 
     function testInvalidSigningCerts() public {
+        string memory testCertsDir = string(abi.encodePacked(testCertsBaseDir, "/", "invalid_signing_certs"));
         vm.warp(1795167418);
-        cleanupTestCerts();
-        genRsaRootCert();
-        genEcdsaSigningCert();
+        cleanupTestCerts(testCertsDir);
+        genRsaRootCert(testCertsDir);
+        genEcdsaSigningCert(testCertsDir);
 
         AVRValidator.RSAParams memory rootParams =
             AVRValidator.verifyRootCACert(vm.readFileBinary(string(abi.encodePacked(testCertsDir, "/root.crt.der"))));
@@ -127,7 +130,7 @@ contract CertificateTest is BasicTest {
         );
     }
 
-    function cleanupTestCerts() internal {
+    function cleanupTestCerts(string memory testCertsDir) internal {
         string[] memory cmd = new string[](3);
         cmd[0] = "rm";
         cmd[1] = "-rf";
@@ -135,33 +138,37 @@ contract CertificateTest is BasicTest {
         runCmd(cmd);
     }
 
-    function genRsaRootCert() internal {
-        string[] memory cmd = new string[](2);
+    function genRsaRootCert(string memory testCertsDir) internal {
+        string[] memory cmd = new string[](3);
         cmd[0] = genCertCmd;
-        cmd[1] = "gen_rsa_root_cert";
+        cmd[1] = testCertsDir;
+        cmd[2] = "gen_rsa_root_cert";
         runCmd(cmd);
     }
 
-    function genRsaSigningCert(string memory bits, string memory exponent) internal {
-        string[] memory cmd = new string[](4);
+    function genRsaSigningCert(string memory testCertsDir, string memory bits, string memory exponent) internal {
+        string[] memory cmd = new string[](5);
         cmd[0] = genCertCmd;
-        cmd[1] = "gen_rsa_signing_cert";
-        cmd[2] = bits;
-        cmd[3] = exponent;
+        cmd[1] = testCertsDir;
+        cmd[2] = "gen_rsa_signing_cert";
+        cmd[3] = bits;
+        cmd[4] = exponent;
         runCmd(cmd);
     }
 
-    function genEcdsaRootCert() internal {
-        string[] memory cmd = new string[](2);
+    function genEcdsaRootCert(string memory testCertsDir) internal {
+        string[] memory cmd = new string[](3);
         cmd[0] = genCertCmd;
-        cmd[1] = "gen_ecdsa_root_cert";
+        cmd[1] = testCertsDir;
+        cmd[2] = "gen_ecdsa_root_cert";
         runCmd(cmd);
     }
 
-    function genEcdsaSigningCert() internal {
-        string[] memory cmd = new string[](2);
+    function genEcdsaSigningCert(string memory testCertsDir) internal {
+        string[] memory cmd = new string[](3);
         cmd[0] = genCertCmd;
-        cmd[1] = "gen_ecdsa_signing_cert";
+        cmd[1] = testCertsDir;
+        cmd[2] = "gen_ecdsa_signing_cert";
         runCmd(cmd);
     }
 
