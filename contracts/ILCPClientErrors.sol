@@ -34,6 +34,7 @@ interface ILCPClientErrors {
     error LCPClientUpdateStateEmittedStatesMustNotEmpty();
     error LCPClientUpdateStatePrevStateIdMustNotEmpty();
     error LCPClientUpdateStateUnexpectedPrevStateId();
+    error LCPClientUpdateStateInconsistentConsensusState();
 
     error LCPClientMisbehaviourPrevStatesMustNotEmpty();
 
