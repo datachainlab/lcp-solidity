@@ -135,6 +135,7 @@ contract LCPClientTest is BasicTest {
                     (bool success, bytes memory ret) = address(lc).staticcall(
                         abi.encodeWithSelector(LCPClientBase.updateClient.selector, clientId, message)
                     );
+                    require(success, "failed to update duplicated client");
                     heights = abi.decode(ret, (Height.Data[]));
                     require(heights.length == 0, "heights length must be 0");
                 }
