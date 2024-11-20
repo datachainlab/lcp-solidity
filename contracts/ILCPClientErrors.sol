@@ -8,7 +8,6 @@ interface ILCPClientErrors {
     error LCPClientClientStateInvalidKeyExpiration();
     error LCPClientClientStateInvalidMrenclaveLength();
     error LCPClientClientStateUnexpectedMrenclave();
-    error LCPClientClientStateEmptyOperators();
     error LCPClientClientStateInvalidOperatorAddress();
     error LCPClientClientStateInvalidOperatorAddressLength();
     error LCPClientClientStateInvalidOperatorsNonce();

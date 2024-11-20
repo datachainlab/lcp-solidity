@@ -44,22 +44,6 @@ library LCPCommitment {
         bytes state;
     }
 
-    function parseUpdateStateProxyMessage(bytes calldata messageBytes)
-        internal
-        pure
-        returns (UpdateStateProxyMessage memory)
-    {
-        HeaderedProxyMessage memory hm = abi.decode(messageBytes, (HeaderedProxyMessage));
-        // MSB first
-        // 0-1:  version
-        // 2-3:  message type
-        // 4-31: reserved
-        if (hm.header != LCP_MESSAGE_HEADER_UPDATE_STATE) {
-            revert LCPCommitmentUnexpectedProxyMessageHeader();
-        }
-        return abi.decode(hm.message, (UpdateStateProxyMessage));
-    }
-
     struct MisbehaviourProxyMessage {
         PrevState[] prevStates;
         bytes context;
@@ -69,22 +53,6 @@ library LCPCommitment {
     struct PrevState {
         Height.Data height;
         bytes32 stateId;
-    }
-
-    function parseMisbehaviourProxyMessage(bytes calldata messageBytes)
-        internal
-        pure
-        returns (MisbehaviourProxyMessage memory)
-    {
-        HeaderedProxyMessage memory hm = abi.decode(messageBytes, (HeaderedProxyMessage));
-        // MSB first
-        // 0-1:  version
-        // 2-3:  message type
-        // 4-31: reserved
-        if (hm.header != LCP_MESSAGE_HEADER_MISBEHAVIOUR) {
-            revert LCPCommitmentUnexpectedProxyMessageHeader();
-        }
-        return abi.decode(hm.message, (MisbehaviourProxyMessage));
     }
 
     struct ValidationContext {

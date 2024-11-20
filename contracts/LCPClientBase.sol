@@ -650,14 +650,6 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         }
     }
 
-    function verifyECDSASignature(bytes32 commitment, bytes memory signature, address signer)
-        internal
-        pure
-        returns (bool)
-    {
-        return verifyECDSASignature(commitment, signature) == signer;
-    }
-
     function verifyECDSASignature(bytes32 commitment, bytes memory signature) internal pure returns (address) {
         if (uint8(signature[64]) < 27) {
             signature[64] = bytes1(uint8(signature[64]) + 27);
