@@ -169,12 +169,18 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
 
         // set allowed quote status and advisories
         for (uint256 i = 0; i < clientState.allowed_quote_statuses.length; i++) {
-            clientStorage.allowedStatuses.allowedQuoteStatuses[clientState.allowed_quote_statuses[i]] =
-                AVRValidator.FLAG_ALLOWED;
+            string memory allowedQuoteStatus = clientState.allowed_quote_statuses[i];
+            if (bytes(allowedQuoteStatus).length == 0) {
+                revert LCPClientClientStateInvalidAllowedQuoteStatus();
+            }
+            clientStorage.allowedStatuses.allowedQuoteStatuses[allowedQuoteStatus] = AVRValidator.FLAG_ALLOWED;
         }
         for (uint256 i = 0; i < clientState.allowed_advisory_ids.length; i++) {
-            clientStorage.allowedStatuses.allowedAdvisories[clientState.allowed_advisory_ids[i]] =
-                AVRValidator.FLAG_ALLOWED;
+            string memory allowedAdvisoryId = clientState.allowed_advisory_ids[i];
+            if (bytes(allowedAdvisoryId).length == 0) {
+                revert LCPClientClientStateInvalidAllowedAdvisoryId();
+            }
+            clientStorage.allowedStatuses.allowedAdvisories[allowedAdvisoryId] = AVRValidator.FLAG_ALLOWED;
         }
 
         return clientState.latest_height;

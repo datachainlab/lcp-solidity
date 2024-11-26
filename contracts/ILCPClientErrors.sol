@@ -12,6 +12,8 @@ interface ILCPClientErrors {
     error LCPClientClientStateInvalidOperatorAddressLength();
     error LCPClientClientStateInvalidOperatorsNonce();
     error LCPClientClientStateUnexpectedOperatorsNonce(uint64 expectedNonce);
+    error LCPClientClientStateInvalidAllowedQuoteStatus();
+    error LCPClientClientStateInvalidAllowedAdvisoryId();
 
     error LCPClientOperatorsInvalidOrder(address prevOperator, address nextOperator);
     error LCPClientClientStateInvalidOperatorsThreshold();
