@@ -118,6 +118,7 @@ contract LCPClientTest is BasicTest {
         }
 
         TestData[] memory dataList = readTestDataList(commandStartNumber);
+        bool firstUpdate = true;
         for (uint256 i = 0; i < dataList.length; i++) {
             if (dataList[i].cmd == Command.UpdateClient) {
                 UpdateClientMessage.Data memory message = createUpdateClientMessage(dataList[i].path);
@@ -125,6 +126,19 @@ contract LCPClientTest is BasicTest {
                 require(heights.length == 1, "heights length must be 1");
                 console.log("revision_height:");
                 console.log(heights[0].revision_height);
+                if (firstUpdate) {
+                    firstUpdate = false;
+                } else {
+                    // repeat updateClient to check the state is not changed
+                    message = createUpdateClientMessage(dataList[i].path);
+                    // staticcall is expected to succeed because updateClient does not update the state if the message is already processed
+                    (bool success, bytes memory ret) = address(lc).staticcall(
+                        abi.encodeWithSelector(LCPClientBase.updateClient.selector, clientId, message)
+                    );
+                    require(success, "failed to update duplicated client");
+                    heights = abi.decode(ret, (Height.Data[]));
+                    require(heights.length == 0, "heights length must be 0");
+                }
             } else if (dataList[i].cmd == Command.VerifyMembership) {
                 (
                     Height.Data memory height,

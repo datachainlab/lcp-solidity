@@ -200,6 +200,10 @@ library AVRValidator {
                 // find 'advisoryIDs' key and validate them
                 checkpoint = consumeAdvisoryIdsReportJSON(report, checkpoint);
                 validateAdvisories(report, checkpoint, allowedStatus.allowedAdvisories);
+            } else {
+                // NO-OP
+                // Since other statuses do not have `advisoryIDs` field, skip the validation here
+                // NOTE: In production, `allowedQuoteStatuses` should not allow these statuses
             }
         }
 
@@ -259,13 +263,13 @@ library AVRValidator {
                 }
             } else if (chr == CHAR_COMMA) {
                 require(
-                    allowedAdvisories[string(report[lastStart:lastStart + offset - lastStart - 1])] == FLAG_ALLOWED,
+                    allowedAdvisories[string(report[lastStart:offset - 1])] == FLAG_ALLOWED,
                     "disallowed advisory is included"
                 );
             } else if (chr == CHAR_LIST_END) {
                 if (offset - lastStart > 0) {
                     require(
-                        allowedAdvisories[string(report[lastStart:lastStart + offset - lastStart - 1])] == FLAG_ALLOWED,
+                        allowedAdvisories[string(report[lastStart:offset - 1])] == FLAG_ALLOWED,
                         "disallowed advisory is included"
                     );
                 }

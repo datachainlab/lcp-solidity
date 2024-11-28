@@ -29,29 +29,33 @@ pragma solidity ^0.8.12;
 import "@ensdomains/ens-contracts/contracts/dnssec-oracle/BytesUtils.sol";
 
 library NodePtr {
-    // Unpack first byte index
+    /// @dev Unpack first byte index
     function ixs(uint256 self) internal pure returns (uint256) {
         return uint80(self);
     }
-    // Unpack first content byte index
 
+    /// @dev Unpack first content byte index
     function ixf(uint256 self) internal pure returns (uint256) {
         return uint80(self >> 80);
     }
-    // Unpack last content byte index
 
+    /// @dev Unpack last content byte index
     function ixl(uint256 self) internal pure returns (uint256) {
         return uint80(self >> 160);
     }
-    // Pack 3 uint80s into a uint256
 
+    /// @dev Pack 3 uint80s into a uint256
     function getPtr(uint256 _ixs, uint256 _ixf, uint256 _ixl) internal pure returns (uint256) {
+        require(_ixs <= type(uint80).max);
+        require(_ixf <= type(uint80).max);
+        require(_ixl <= type(uint80).max);
         _ixs |= _ixf << 80;
         _ixs |= _ixl << 160;
         return _ixs;
     }
 }
 
+// slither-disable-start dead-code
 library Asn1Decode {
     using NodePtr for uint256;
     using BytesUtils for bytes;
@@ -200,14 +204,16 @@ library Asn1Decode {
 
     function readNodeLength(bytes memory der, uint256 ix) private pure returns (uint256) {
         uint256 length;
-        uint80 ixFirstContentByte;
-        uint80 ixLastContentByte;
-        if ((der[ix + 1] & 0x80) == 0) {
-            length = uint8(der[ix + 1]);
-            ixFirstContentByte = uint80(ix + 2);
-            ixLastContentByte = uint80(ixFirstContentByte + length - 1);
+        uint256 ixFirstContentByte;
+        uint256 ixLastContentByte;
+
+        uint8 b = uint8(der[ix + 1]);
+        if ((b & 0x80) == 0) {
+            length = b;
+            ixFirstContentByte = ix + 2;
+            ixLastContentByte = ixFirstContentByte + length - 1;
         } else {
-            uint8 lengthbytesLength = uint8(der[ix + 1] & 0x7F);
+            uint256 lengthbytesLength = uint256(b & 0x7F);
             if (lengthbytesLength == 1) {
                 length = der.readUint8(ix + 2);
             } else if (lengthbytesLength == 2) {
@@ -215,9 +221,10 @@ library Asn1Decode {
             } else {
                 length = uint256(der.readBytesN(ix + 2, lengthbytesLength) >> (32 - lengthbytesLength) * 8);
             }
-            ixFirstContentByte = uint80(ix + 2 + lengthbytesLength);
-            ixLastContentByte = uint80(ixFirstContentByte + length - 1);
+            ixFirstContentByte = ix + 2 + lengthbytesLength;
+            ixLastContentByte = ixFirstContentByte + length - 1;
         }
         return NodePtr.getPtr(ix, ixFirstContentByte, ixLastContentByte);
     }
 }
+// slither-disable-end dead-code

@@ -8,11 +8,12 @@ interface ILCPClientErrors {
     error LCPClientClientStateInvalidKeyExpiration();
     error LCPClientClientStateInvalidMrenclaveLength();
     error LCPClientClientStateUnexpectedMrenclave();
-    error LCPClientClientStateEmptyOperators();
     error LCPClientClientStateInvalidOperatorAddress();
     error LCPClientClientStateInvalidOperatorAddressLength();
     error LCPClientClientStateInvalidOperatorsNonce();
     error LCPClientClientStateUnexpectedOperatorsNonce(uint64 expectedNonce);
+    error LCPClientClientStateInvalidAllowedQuoteStatus();
+    error LCPClientClientStateInvalidAllowedAdvisoryId();
 
     error LCPClientOperatorsInvalidOrder(address prevOperator, address nextOperator);
     error LCPClientClientStateInvalidOperatorsThreshold();
@@ -34,6 +35,7 @@ interface ILCPClientErrors {
     error LCPClientUpdateStateEmittedStatesMustNotEmpty();
     error LCPClientUpdateStatePrevStateIdMustNotEmpty();
     error LCPClientUpdateStateUnexpectedPrevStateId();
+    error LCPClientUpdateStateInconsistentConsensusState();
 
     error LCPClientMisbehaviourPrevStatesMustNotEmpty();
 

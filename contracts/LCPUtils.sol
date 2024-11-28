@@ -17,7 +17,7 @@ library LCPUtils {
         pure
         returns (bytes memory bz, uint256 pos)
     {
-        pos = BytesUtils.find(src, offset, src.length, needle);
+        pos = BytesUtils.find(src, offset, src.length - offset, needle);
         if (pos == type(uint256).max) {
             revert LCPUtilsReadBytesUntilNotFound();
         }

@@ -57,12 +57,16 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
 
     // --------------------- Storage fields ---------------------
 
+    /// @dev clientId => client storage
     mapping(string => ClientStorage) internal clientStorages;
 
-    // rootCA's public key parameters
+    /// @dev RootCA's public key parameters
     AVRValidator.RSAParams internal verifiedRootCAParams;
-    // keccak256(signingCert) => RSAParams of signing public key
+    /// @dev keccak256(signingCert) => RSAParams of signing public key
     mapping(bytes32 => AVRValidator.RSAParams) internal verifiedSigningRSAParams;
+
+    /// @dev Reserved storage space to allow for layout changes in the future
+    uint256[50] private __gap;
 
     // --------------------- Constructor ---------------------
 
@@ -100,7 +104,8 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
     /**
      * @dev initializeClient initializes a new client with the given state.
      *      If succeeded, it returns heights at which the consensus state are stored.
-     *      The function must be only called by IBCHandler.
+     *      This function is guaranteed by the IBC contract to be called only once for each `clientId`.
+     * @param clientId the client identifier which is unique within the IBC handler
      */
     function initializeClient(
         string calldata clientId,
@@ -164,12 +169,18 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
 
         // set allowed quote status and advisories
         for (uint256 i = 0; i < clientState.allowed_quote_statuses.length; i++) {
-            clientStorage.allowedStatuses.allowedQuoteStatuses[clientState.allowed_quote_statuses[i]] =
-                AVRValidator.FLAG_ALLOWED;
+            string memory allowedQuoteStatus = clientState.allowed_quote_statuses[i];
+            if (bytes(allowedQuoteStatus).length == 0) {
+                revert LCPClientClientStateInvalidAllowedQuoteStatus();
+            }
+            clientStorage.allowedStatuses.allowedQuoteStatuses[allowedQuoteStatus] = AVRValidator.FLAG_ALLOWED;
         }
         for (uint256 i = 0; i < clientState.allowed_advisory_ids.length; i++) {
-            clientStorage.allowedStatuses.allowedAdvisories[clientState.allowed_advisory_ids[i]] =
-                AVRValidator.FLAG_ALLOWED;
+            string memory allowedAdvisoryId = clientState.allowed_advisory_ids[i];
+            if (bytes(allowedAdvisoryId).length == 0) {
+                revert LCPClientClientStateInvalidAllowedAdvisoryId();
+            }
+            clientStorage.allowedStatuses.allowedAdvisories[allowedAdvisoryId] = AVRValidator.FLAG_ALLOWED;
         }
 
         return clientState.latest_height;
@@ -433,16 +444,22 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
 
         LCPCommitment.validationContextEval(pmsg.context, block.timestamp * 1e9);
 
-        uint128 latestHeight = clientState.latest_height.toUint128();
         uint128 postHeight = pmsg.postHeight.toUint128();
-        if (latestHeight < postHeight) {
-            clientState.latest_height = pmsg.postHeight;
-        }
-
         consensusState = clientStorage.consensusStates[postHeight];
+        if (consensusState.stateId != bytes32(0)) {
+            if (consensusState.stateId != pmsg.postStateId || consensusState.timestamp != uint64(pmsg.timestamp)) {
+                revert LCPClientUpdateStateInconsistentConsensusState();
+            }
+            // return empty heights if the consensus state is already stored
+            return heights;
+        }
         consensusState.stateId = pmsg.postStateId;
         consensusState.timestamp = uint64(pmsg.timestamp);
 
+        uint128 latestHeight = clientState.latest_height.toUint128();
+        if (latestHeight < postHeight) {
+            clientState.latest_height = pmsg.postHeight;
+        }
         heights = new Height.Data[](1);
         heights[0] = pmsg.postHeight;
         return heights;
@@ -637,14 +654,6 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         ) {
             revert LCPClientOperatorSignaturesInsufficient(success);
         }
-    }
-
-    function verifyECDSASignature(bytes32 commitment, bytes memory signature, address signer)
-        internal
-        pure
-        returns (bool)
-    {
-        return verifyECDSASignature(commitment, signature) == signer;
     }
 
     function verifyECDSASignature(bytes32 commitment, bytes memory signature) internal pure returns (address) {
