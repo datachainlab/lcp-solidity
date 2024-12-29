@@ -30,7 +30,7 @@ contract LCPClientOperatorTest is BasicTest {
     // ---------------------------- Test Cases ----------------------------
 
     function testPreComputationValues() public pure {
-        assertEq(LCPOperator.domainSeparatorUniversal(), LCPOperator.DOMAIN_SEPARATOR_REGISTER_ENCLAVE_KEY);
+        assertEq(LCPOperator.domainSeparatorUniversal(), LCPOperator.DOMAIN_SEPARATOR_LCP_CLIENT);
         assertEq(LCPOperator.chainTypeSalt(LCPOperator.CHAIN_TYPE_EVM, hex""), LCPOperator.CHAIN_TYPE_EVM_SALT);
     }
 

@@ -18,7 +18,7 @@ import {LCPProtoMarshaler} from "./LCPProtoMarshaler.sol";
 import {AVRValidator} from "./AVRValidator.sol";
 import {ILCPClientErrors} from "./ILCPClientErrors.sol";
 
-abstract contract LCPClientV2Base is ILightClient, ILCPClientErrors {
+abstract contract LCPClientCommon is ILightClient, ILCPClientErrors {
     using IBCHeight for Height.Data;
 
     // --------------------- Data structures ---------------------
@@ -40,6 +40,7 @@ abstract contract LCPClientV2Base is ILightClient, ILCPClientErrors {
         mapping(uint128 => ConsensusState) consensusStates;
         // enclave key => EKInfo
         mapping(address => EKInfo) ekInfos;
+        bytes32 zkDCAPRisc0ImageId;
     }
 
     // --------------------- Immutable fields ---------------------
@@ -68,19 +69,13 @@ abstract contract LCPClientV2Base is ILightClient, ILCPClientErrors {
         _;
     }
 
-    // --------------------- Public methods ---------------------
+    // --------------------- Internal methods ---------------------
 
-    /**
-     * @dev initializeClient initializes a new client with the given state.
-     *      If succeeded, it returns heights at which the consensus state are stored.
-     *      This function is guaranteed by the IBC contract to be called only once for each `clientId`.
-     * @param clientId the client identifier which is unique within the IBC handler
-     */
-    function initializeClient(
-        string calldata clientId,
+    function _initializeClient(
+        ClientStorage storage clientStorage,
         bytes calldata protoClientState,
         bytes calldata protoConsensusState
-    ) public onlyIBC returns (Height.Data memory height) {
+    ) internal returns (ProtoClientState.Data memory, ProtoConsensusState.Data memory) {
         ProtoClientState.Data memory clientState = LCPProtoMarshaler.unmarshalClientState(protoClientState);
         ProtoConsensusState.Data memory consensusState = LCPProtoMarshaler.unmarshalConsensusState(protoConsensusState);
 
@@ -133,7 +128,6 @@ abstract contract LCPClientV2Base is ILightClient, ILCPClientErrors {
             }
             prev = addr;
         }
-        ClientStorage storage clientStorage = clientStorages[clientId];
         clientStorage.clientState = clientState;
 
         // set allowed quote status and advisories
@@ -151,14 +145,20 @@ abstract contract LCPClientV2Base is ILightClient, ILCPClientErrors {
             }
             clientStorage.allowedStatuses.allowedAdvisories[allowedAdvisoryId] = AVRValidator.FLAG_ALLOWED;
         }
-
-        return clientState.latest_height;
+        return (clientState, consensusState);
     }
+
+    // --------------------- Public methods ---------------------
 
     /**
      * @dev getTimestampAtHeight returns the timestamp of the consensus state at the given height.
      */
-    function getTimestampAtHeight(string calldata clientId, Height.Data calldata height) public view returns (uint64) {
+    function getTimestampAtHeight(string calldata clientId, Height.Data calldata height)
+        public
+        view
+        override
+        returns (uint64)
+    {
         ConsensusState storage consensusState = clientStorages[clientId].consensusStates[height.toUint128()];
         if (consensusState.timestamp == 0) {
             revert LCPClientConsensusStateNotFound();
@@ -169,7 +169,7 @@ abstract contract LCPClientV2Base is ILightClient, ILCPClientErrors {
     /**
      * @dev getLatestHeight returns the latest height of the client state corresponding to `clientId`.
      */
-    function getLatestHeight(string calldata clientId) public view returns (Height.Data memory) {
+    function getLatestHeight(string calldata clientId) public view override returns (Height.Data memory) {
         ProtoClientState.Data storage clientState = clientStorages[clientId].clientState;
         if (clientState.latest_height.revision_height == 0) {
             revert LCPClientClientStateNotFound();
@@ -180,7 +180,7 @@ abstract contract LCPClientV2Base is ILightClient, ILCPClientErrors {
      * @dev getStatus returns the status of the client corresponding to `clientId`.
      */
 
-    function getStatus(string calldata clientId) public view returns (ClientStatus) {
+    function getStatus(string calldata clientId) public view override returns (ClientStatus) {
         return clientStorages[clientId].clientState.frozen ? ClientStatus.Frozen : ClientStatus.Active;
     }
 
@@ -190,6 +190,7 @@ abstract contract LCPClientV2Base is ILightClient, ILCPClientErrors {
     function getLatestInfo(string calldata clientId)
         public
         view
+        override
         returns (Height.Data memory latestHeight, uint64 latestTimestamp, ClientStatus status)
     {
         ClientStorage storage clientStorage = clientStorages[clientId];
@@ -558,7 +559,7 @@ abstract contract LCPClientV2Base is ILightClient, ILCPClientErrors {
     }
 }
 
-abstract contract LCPClientBase is LCPClientV2Base {
+abstract contract LCPClientBase is LCPClientCommon {
     using IBCHeight for Height.Data;
 
     /// @dev if developmentMode is true, the client allows the remote attestation of IAS in development.
@@ -570,7 +571,7 @@ abstract contract LCPClientBase is LCPClientV2Base {
     /// @custom:oz-upgrades-unsafe-allow constructor
     /// @param ibcHandler_ the address of the IBC handler contract
     /// @param developmentMode_ if true, the client allows the enclave debug mode
-    constructor(address ibcHandler_, bool developmentMode_) LCPClientV2Base(ibcHandler_) {
+    constructor(address ibcHandler_, bool developmentMode_) LCPClientCommon(ibcHandler_) {
         developmentMode = developmentMode_;
     }
 
@@ -595,13 +596,21 @@ abstract contract LCPClientBase is LCPClientV2Base {
         return developmentMode;
     }
 
-    /// @dev initializeRootCACert initializes the root CA's public key parameters.
-    /// All contracts that inherit LCPClientBase should call this in the constructor or initializer.
-    function initializeRootCACert(bytes memory rootCACert) internal {
-        if (verifiedRootCAParams.notAfter != 0) {
-            revert LCPClientRootCACertAlreadyInitialized();
-        }
-        verifiedRootCAParams = AVRValidator.verifyRootCACert(rootCACert);
+    /**
+     * @dev initializeClient initializes a new client with the given state.
+     *      If succeeded, it returns heights at which the consensus state are stored.
+     *      This function is guaranteed by the IBC contract to be called only once for each `clientId`.
+     * @param clientId the client identifier which is unique within the IBC handler
+     */
+    function initializeClient(
+        string calldata clientId,
+        bytes calldata protoClientState,
+        bytes calldata protoConsensusState
+    ) public override onlyIBC returns (Height.Data memory height) {
+        (ProtoClientState.Data memory clientState,) =
+            _initializeClient(clientStorages[clientId], protoClientState, protoConsensusState);
+        require(clientState.zkdcap_verifier_info.length == 0, "verifier info must be empty");
+        return clientState.latest_height;
     }
 
     /**
@@ -678,5 +687,16 @@ abstract contract LCPClientBase is LCPClientV2Base {
 
         // Note: client and consensus state are not always updated in registerEnclaveKey
         return heights;
+    }
+
+    // --------------------- Internal methods ---------------------
+
+    /// @dev initializeRootCACert initializes the root CA's public key parameters.
+    /// All contracts that inherit LCPClientBase should call this in the constructor or initializer.
+    function initializeRootCACert(bytes memory rootCACert) internal {
+        if (verifiedRootCAParams.notAfter != 0) {
+            revert LCPClientRootCACertAlreadyInitialized();
+        }
+        verifiedRootCAParams = AVRValidator.verifyRootCACert(rootCACert);
     }
 }

@@ -133,7 +133,7 @@ contract LCPClientTest is BasicTest {
                     message = createUpdateClientMessage(dataList[i].path);
                     // staticcall is expected to succeed because updateClient does not update the state if the message is already processed
                     (bool success, bytes memory ret) = address(lc).staticcall(
-                        abi.encodeWithSelector(LCPClientBase.updateClient.selector, clientId, message)
+                        abi.encodeWithSelector(LCPClientCommon.updateClient.selector, clientId, message)
                     );
                     require(success, "failed to update duplicated client");
                     heights = abi.decode(ret, (Height.Data[]));
