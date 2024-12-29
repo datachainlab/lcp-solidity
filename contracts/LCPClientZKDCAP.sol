@@ -9,6 +9,7 @@ import {IbcLightclientsLcpV1ZKDCAPRegisterEnclaveKeyMessage as ZKDCAPRegisterEnc
     "./proto/ibc/lightclients/lcp/v1/LCP.sol";
 import {LCPProtoMarshaler} from "./LCPProtoMarshaler.sol";
 import {LCPClientV2Base} from "./LCPClientBase.sol";
+import {IRiscZeroVerifier} from "risc0/IRiscZeroVerifier.sol";
 
 contract LCPClientZKDCAP is LCPClientV2Base {
     using IBCHeight for Height.Data;
@@ -16,6 +17,13 @@ contract LCPClientZKDCAP is LCPClientV2Base {
     // --------------------- Events ---------------------
 
     event ZKDCAPRegisteredEnclaveKey(string clientId, address enclaveKey, uint256 expiredAt, address operator);
+
+    // --------------------- Immutable fields ---------------------
+
+    // /// @notice RISC Zero verifier contract address.
+    // IRiscZeroVerifier public immutable verifier;
+
+    // --------------------- Storage fields ---------------------
 
     /// @dev Reserved storage space to allow for layout changes in the future
     uint256[50] private __gap;
@@ -53,6 +61,8 @@ contract LCPClientZKDCAP is LCPClientV2Base {
         public
         returns (Height.Data[] memory heights)
     {
+        ClientStorage storage clientStorage = clientStorages[clientId];
+        revert("not implemented");
         return heights;
     }
 }
