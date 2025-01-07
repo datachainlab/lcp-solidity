@@ -68,7 +68,7 @@ library DCAPValidator {
         DCAPVerifierCommit memory verifierCommit;
         verifierCommit.attestationTime = uint64(bytes8(commit[0:8]));
         verifierCommit.sgxIntelRootCAHash = bytes32(commit[8:40]);
-        // TODO should check quote version??
+        require(uint16(bytes2(commit[40:42])) == 3, "unexpected quote version");
         require(uint32(bytes4(commit[42:46])) == 0, "unexpected tee type");
         verifierCommit.tcbStatus = uint8(commit[46]);
         uint256 sgxQuoteBodyOffset = 53;
