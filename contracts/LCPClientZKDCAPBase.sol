@@ -104,21 +104,21 @@ abstract contract LCPClientZKDCAPBase is LCPClientCommon {
         ClientStorage storage clientStorage = clientStorages[clientId];
         require(clientStorage.zkDCAPRisc0ImageId != bytes32(0), "image ID not set");
         riscZeroVerifier.verify(message.proof, clientStorage.zkDCAPRisc0ImageId, sha256(message.commit));
-        DCAPValidator.DCAPVerifierCommit memory commit = DCAPValidator.parseCommit(message.commit);
-        require(commit.sgxIntelRootCAHash == intelRootCAHash, "unexpected root CA hash");
+        DCAPValidator.Output memory output = DCAPValidator.parseCommit(message.commit);
+        require(output.sgxIntelRootCAHash == intelRootCAHash, "unexpected root CA hash");
 
-        if (bytes32(clientStorage.clientState.mrenclave) != commit.mrenclave) {
+        if (bytes32(clientStorage.clientState.mrenclave) != output.mrenclave) {
             revert LCPClientClientStateUnexpectedMrenclave();
         }
 
         require(
-            clientStorage.allowedStatuses.allowedQuoteStatuses[DCAPValidator.tcbStatusToString(commit.tcbStatus)]
+            clientStorage.allowedStatuses.allowedQuoteStatuses[DCAPValidator.tcbStatusToString(output.tcbStatus)]
                 == AVRValidator.FLAG_ALLOWED,
             "disallowed TCB status"
         );
-        for (uint256 i = 0; i < commit.advisoryIDs.length; i++) {
+        for (uint256 i = 0; i < output.advisoryIDs.length; i++) {
             require(
-                clientStorage.allowedStatuses.allowedAdvisories[commit.advisoryIDs[i]] == AVRValidator.FLAG_ALLOWED,
+                clientStorage.allowedStatuses.allowedAdvisories[output.advisoryIDs[i]] == AVRValidator.FLAG_ALLOWED,
                 "disallowed advisory ID"
             );
         }
@@ -135,14 +135,14 @@ abstract contract LCPClientZKDCAPBase is LCPClientCommon {
                 message.operator_signature
             );
         }
-        if (commit.operator != address(0) && commit.operator != operator) {
-            revert LCPClientAVRUnexpectedOperator(operator, commit.operator);
+        if (output.operator != address(0) && output.operator != operator) {
+            revert LCPClientAVRUnexpectedOperator(operator, output.operator);
         }
-        uint64 expiredAt = commit.attestationTime + clientStorage.clientState.key_expiration;
-        if (expiredAt <= block.timestamp) {
-            revert LCPClientAVRAlreadyExpired();
+        if (block.timestamp < output.validityNotBeforeMax || block.timestamp > output.validityNotAfterMin) {
+            revert LCPClientZKDCAPBaseOutputNotValid();
         }
-        EKInfo storage ekInfo = clientStorage.ekInfos[commit.enclaveKey];
+        uint64 expiredAt = output.validityNotAfterMin;
+        EKInfo storage ekInfo = clientStorage.ekInfos[output.enclaveKey];
         if (ekInfo.expiredAt != 0) {
             if (ekInfo.operator != operator) {
                 revert LCPClientEnclaveKeyUnexpectedOperator(ekInfo.operator, operator);
@@ -156,7 +156,7 @@ abstract contract LCPClientZKDCAPBase is LCPClientCommon {
         ekInfo.expiredAt = expiredAt;
         ekInfo.operator = operator;
 
-        emit ZKDCAPRegisteredEnclaveKey(clientId, commit.enclaveKey, expiredAt, operator);
+        emit ZKDCAPRegisteredEnclaveKey(clientId, output.enclaveKey, expiredAt, operator);
 
         // Note: client and consensus state are not always updated in registerEnclaveKey
         return heights;

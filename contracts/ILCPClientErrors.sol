@@ -58,4 +58,7 @@ interface ILCPClientErrors {
 
     error LCPClientUpdateOperatorsPermissionless();
     error LCPClientUpdateOperatorsSignatureUnexpectedOperator(address actual, address expected);
+
+    error LCPClientZKDCAPBaseOutputNotValid();
+    error LCPClientZKDCAPUnrecognizedTCBStatus();
 }
