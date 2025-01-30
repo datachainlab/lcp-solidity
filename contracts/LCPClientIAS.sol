@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.12;
 
-import {LCPClientBase} from "./LCPClientBase.sol";
+import {LCPClientIASBase} from "./LCPClientIASBase.sol";
 
-contract LCPClient is LCPClientBase {
+contract LCPClientIAS is LCPClientIASBase {
     constructor(address ibcHandler_, bool developmentMode_, bytes memory rootCACert)
-        LCPClientBase(ibcHandler_, developmentMode_)
+        LCPClientIASBase(ibcHandler_, developmentMode_)
     {
         initializeRootCACert(rootCACert);
     }

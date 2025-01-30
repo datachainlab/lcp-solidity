@@ -3,7 +3,7 @@ pragma solidity ^0.8.12;
 
 import {IBCHeight} from "@hyperledger-labs/yui-ibc-solidity/contracts/core/02-client/IBCHeight.sol";
 import "./TestHelper.t.sol";
-import "../contracts/LCPClient.sol";
+import "../contracts/LCPClientIAS.sol";
 import {LCPProtoMarshaler} from "../contracts/LCPProtoMarshaler.sol";
 import {ILCPClientErrors} from "../contracts/ILCPClientErrors.sol";
 import {
@@ -20,17 +20,17 @@ contract LCPClientOperatorTest is BasicTest {
 
     string internal constant commandResultSuffix = "_result";
 
-    LCPClient lc;
+    LCPClientIAS lc;
 
     function setUp() public {
         vm.warp(1718465726);
-        lc = new LCPClient(address(this), true, vm.readFileBinary("./test/data/certs/simulation_rootca.der"));
+        lc = new LCPClientIAS(address(this), true, vm.readFileBinary("./test/data/certs/simulation_rootca.der"));
     }
 
     // ---------------------------- Test Cases ----------------------------
 
     function testPreComputationValues() public pure {
-        assertEq(LCPOperator.domainSeparatorUniversal(), LCPOperator.DOMAIN_SEPARATOR_REGISTER_ENCLAVE_KEY);
+        assertEq(LCPOperator.domainSeparatorUniversal(), LCPOperator.DOMAIN_SEPARATOR_LCP_CLIENT);
         assertEq(LCPOperator.chainTypeSalt(LCPOperator.CHAIN_TYPE_EVM, hex""), LCPOperator.CHAIN_TYPE_EVM_SALT);
     }
 

@@ -15,7 +15,7 @@ library LCPOperator {
     bytes32 internal constant DOMAIN_SEPARATOR_VERSION = keccak256("1");
 
     // domainSeparatorUniversal()
-    bytes32 internal constant DOMAIN_SEPARATOR_REGISTER_ENCLAVE_KEY =
+    bytes32 internal constant DOMAIN_SEPARATOR_LCP_CLIENT =
         0x7fd21c2453e80741907e7ff11fd62ae1daa34c6fc0c2eced821f1c1d3fe88a4c;
     ChainType internal constant CHAIN_TYPE_EVM = ChainType.wrap(1);
     // chainTypeSalt(CHAIN_TYPE_EVM, hex"")
@@ -50,9 +50,7 @@ library LCPOperator {
 
     function computeEIP712RegisterEnclaveKey(bytes calldata avr) internal pure returns (bytes memory) {
         return abi.encodePacked(
-            hex"1901",
-            DOMAIN_SEPARATOR_REGISTER_ENCLAVE_KEY,
-            keccak256(abi.encode(TYPEHASH_REGISTER_ENCLAVE_KEY, keccak256(avr)))
+            hex"1901", DOMAIN_SEPARATOR_LCP_CLIENT, keccak256(abi.encode(TYPEHASH_REGISTER_ENCLAVE_KEY, keccak256(avr)))
         );
     }
 

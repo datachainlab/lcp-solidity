@@ -2,8 +2,9 @@
 pragma solidity ^0.8.12;
 
 import "forge-std/console.sol";
-import "../contracts/LCPClient.sol";
+import "../contracts/LCPClientIAS.sol";
 import "../contracts/AVRValidator.sol";
+import "../contracts/RemoteAttestation.sol";
 import "./TestHelper.t.sol";
 
 contract ReportTest is BasicTest {
@@ -14,7 +15,7 @@ contract ReportTest is BasicTest {
         address operator;
     }
 
-    AVRValidator.ReportAllowedStatus internal allowedStatuses;
+    RemoteAttestation.ReportAllowedStatus internal allowedStatuses;
 
     mapping(string => uint256) internal allowedAdvisoriesForValidateAdvisories;
 
@@ -102,8 +103,8 @@ contract ReportTest is BasicTest {
     function testValidateAdvisories() public {
         uint256 offset;
 
-        allowedAdvisoriesForValidateAdvisories["INTEL-SA-00000"] = AVRValidator.FLAG_ALLOWED;
-        allowedAdvisoriesForValidateAdvisories["INTEL-SA-00001"] = AVRValidator.FLAG_ALLOWED;
+        allowedAdvisoriesForValidateAdvisories["INTEL-SA-00000"] = RemoteAttestation.FLAG_ALLOWED;
+        allowedAdvisoriesForValidateAdvisories["INTEL-SA-00001"] = RemoteAttestation.FLAG_ALLOWED;
 
         {
             offset = TestAVRValidator.validateAdvisories(bytes("[]"), 0, allowedAdvisoriesForValidateAdvisories);
@@ -126,9 +127,9 @@ contract ReportTest is BasicTest {
     }
 
     function initAllowedStatusAdvisories(string memory quoteStatus, string[] memory advisories) internal {
-        allowedStatuses.allowedQuoteStatuses[quoteStatus] = AVRValidator.FLAG_ALLOWED;
+        allowedStatuses.allowedQuoteStatuses[quoteStatus] = RemoteAttestation.FLAG_ALLOWED;
         for (uint256 i = 0; i < advisories.length; i++) {
-            allowedStatuses.allowedAdvisories[advisories[i]] = AVRValidator.FLAG_ALLOWED;
+            allowedStatuses.allowedAdvisories[advisories[i]] = RemoteAttestation.FLAG_ALLOWED;
         }
     }
 

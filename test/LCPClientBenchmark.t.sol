@@ -3,7 +3,7 @@ pragma solidity ^0.8.12;
 
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "./TestHelper.t.sol";
-import "../contracts/LCPClient.sol";
+import "../contracts/LCPClientIAS.sol";
 import {
     IbcLightclientsLcpV1ClientState as ClientState,
     IbcLightclientsLcpV1ConsensusState as ConsensusState,
@@ -12,7 +12,6 @@ import {
 } from "../contracts/proto/ibc/lightclients/lcp/v1/LCP.sol";
 import {LCPProtoMarshaler} from "../contracts/LCPProtoMarshaler.sol";
 import {IBCHeight} from "@hyperledger-labs/yui-ibc-solidity/contracts/core/02-client/IBCHeight.sol";
-import {LCPOperator} from "../contracts/LCPOperator.sol";
 
 abstract contract BaseLCPClientBenchmark is BasicTest {
     string internal constant commandAvrFile = "test/data/client/02/001-avr";
@@ -88,9 +87,9 @@ abstract contract BaseLCPClientBenchmark is BasicTest {
     }
 }
 
-contract BLCPClient is LCPClient {
+contract BLCPClient is LCPClientIAS {
     constructor(address ibcHandler_, bool developmentMode_, bytes memory rootCACert)
-        LCPClient(ibcHandler_, developmentMode_, rootCACert)
+        LCPClientIAS(ibcHandler_, developmentMode_, rootCACert)
     {}
 
     function setSigningRSAParams(bytes32 signingCertHash, AVRValidator.RSAParams calldata params) public {

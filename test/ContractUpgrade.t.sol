@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 import {Options} from "openzeppelin-foundry-upgrades/Options.sol";
-import {LCPClientOwnableUpgradeable} from "../contracts/LCPClientOwnableUpgradeable.sol";
+import {LCPClientIASOwnableUpgradeable} from "../contracts/LCPClientIASOwnableUpgradeable.sol";
 
 contract ContractUpgrade is Test {
     string internal constant rootCAFile = "test/data/certs/Intel_SGX_Attestation_RootCA.der";
@@ -18,7 +18,9 @@ contract ContractUpgrade is Test {
         bytes memory rootCACert = vm.readFileBinary(rootCAFile);
         vm.warp(2524607999);
         Upgrades.deployUUPSProxy(
-            "LCPClientOwnableUpgradeable.sol", abi.encodeCall(LCPClientOwnableUpgradeable.initialize, rootCACert), opts
+            "LCPClientIASOwnableUpgradeable.sol",
+            abi.encodeCall(LCPClientIASOwnableUpgradeable.initialize, rootCACert),
+            opts
         );
     }
 }

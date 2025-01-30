@@ -7,6 +7,7 @@ import {Base64} from "base64/base64.sol";
 import {Asn1Decode, NodePtr} from "./Asn1Decode.sol";
 import {LCPUtils} from "./LCPUtils.sol";
 import {ILCPClientErrors} from "./ILCPClientErrors.sol";
+import {RemoteAttestation} from "./RemoteAttestation.sol";
 
 /**
  * @dev AVRValidator provides the validation functions of Intel's Attestation Verification Report(AVR)
@@ -21,10 +22,6 @@ library AVRValidator {
         0x2a864886f70d01010b0000000000000000000000000000000000000000000000;
     // OID_RSA_ENCRYPTION is the OID of rsaEncryption(1.2.840.113549.1.1.1)
     bytes32 internal constant OID_RSA_ENCRYPTION = 0x2a864886f70d0101010000000000000000000000000000000000000000000000;
-    // FLAG_DISALLOWED indicates that the advisory or quote status is not allowed.
-    uint256 internal constant FLAG_DISALLOWED = 0;
-    // FLAG_ALLOWED indicates that the advisory or quote status is allowed.
-    uint256 internal constant FLAG_ALLOWED = 1;
     // '"'
     bytes32 internal constant CHAR_DOUBLE_QUOTE = bytes32(hex"22");
     // ','
@@ -50,13 +47,6 @@ library AVRValidator {
         uint256 notAfter; // seconds since epoch
     }
 
-    struct ReportAllowedStatus {
-        // quote status => flag(0: not allowed, 1: allowed)
-        mapping(string => uint256) allowedQuoteStatuses;
-        // advisory id => flag(0: not allowed, 1: allowed)
-        mapping(string => uint256) allowedAdvisories;
-    }
-
     // ------------------ Public functions ------------------
 
     struct ReportExtractedElements {
@@ -70,7 +60,7 @@ library AVRValidator {
         bool developmentMode,
         AVRValidator.RSAParams storage verifiedRootCAParams,
         mapping(bytes32 => AVRValidator.RSAParams) storage verifiedSigningRSAParams,
-        ReportAllowedStatus storage allowedStatuses,
+        RemoteAttestation.ReportAllowedStatus storage allowedStatuses,
         bytes calldata report,
         bytes calldata signingCert,
         bytes calldata signature
@@ -174,7 +164,7 @@ library AVRValidator {
     function validateAndExtractElements(
         bool developmentMode,
         bytes calldata report,
-        ReportAllowedStatus storage allowedStatus
+        RemoteAttestation.ReportAllowedStatus storage allowedStatus
     ) public view returns (ReportExtractedElements memory) {
         // find 'timestamp' key
         (uint256 i, bytes memory timestamp) = consumeTimestampReportJSON(report, 0);
@@ -190,7 +180,8 @@ library AVRValidator {
         // skip the validation for quote status and advisories if status is "OK"
         if (!(status.length == 2 && status[0] == 0x4f && status[1] == 0x4b)) {
             require(
-                allowedStatus.allowedQuoteStatuses[string(status)] == FLAG_ALLOWED, "the quote status is not allowed"
+                allowedStatus.allowedQuoteStatuses[string(status)] == RemoteAttestation.FLAG_ALLOWED,
+                "the quote status is not allowed"
             );
             bytes32 h = keccak256(status);
             if (
@@ -263,13 +254,13 @@ library AVRValidator {
                 }
             } else if (chr == CHAR_COMMA) {
                 require(
-                    allowedAdvisories[string(report[lastStart:offset - 1])] == FLAG_ALLOWED,
+                    allowedAdvisories[string(report[lastStart:offset - 1])] == RemoteAttestation.FLAG_ALLOWED,
                     "disallowed advisory is included"
                 );
             } else if (chr == CHAR_LIST_END) {
                 if (offset - lastStart > 0) {
                     require(
-                        allowedAdvisories[string(report[lastStart:offset - 1])] == FLAG_ALLOWED,
+                        allowedAdvisories[string(report[lastStart:offset - 1])] == RemoteAttestation.FLAG_ALLOWED,
                         "disallowed advisory is included"
                     );
                 }

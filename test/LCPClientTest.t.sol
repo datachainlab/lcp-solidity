@@ -4,8 +4,8 @@ pragma solidity ^0.8.12;
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@ensdomains/ens-contracts/contracts/dnssec-oracle/BytesUtils.sol";
 import {IBCHeight} from "@hyperledger-labs/yui-ibc-solidity/contracts/core/02-client/IBCHeight.sol";
-import "../contracts/LCPClient.sol";
-import "../contracts/LCPClientBase.sol";
+import "../contracts/LCPClientIAS.sol";
+import "../contracts/LCPClientIASBase.sol";
 import {
     IbcLightclientsLcpV1ClientState as ClientState,
     IbcLightclientsLcpV1ConsensusState as ConsensusState,
@@ -22,8 +22,8 @@ contract LCPClientTest is BasicTest {
     using IBCHeight for Height.Data;
 
     TestContext testContext;
-    LCPClient iasLC;
-    LCPClient simulationLC;
+    LCPClientIAS iasLC;
+    LCPClientIAS simulationLC;
 
     string internal constant baseDir = "test/data/client";
     uint256 internal constant commandNumberPrefixLength = 4; // "000-"
@@ -33,7 +33,7 @@ contract LCPClientTest is BasicTest {
 
     struct TestContext {
         string dir;
-        LCPClient lc;
+        LCPClientIAS lc;
         Vm.Wallet opWallet;
     }
 
@@ -43,10 +43,12 @@ contract LCPClientTest is BasicTest {
 
     function setUp() public {
         vm.warp(1692703263);
-        iasLC =
-            new LCPClient(address(this), true, vm.readFileBinary("./test/data/certs/Intel_SGX_Attestation_RootCA.der"));
+        iasLC = new LCPClientIAS(
+            address(this), true, vm.readFileBinary("./test/data/certs/Intel_SGX_Attestation_RootCA.der")
+        );
         require(iasLC.isDevelopmentMode() == true, "developmentMode must be true");
-        simulationLC = new LCPClient(address(this), true, vm.readFileBinary("./test/data/certs/simulation_rootca.der"));
+        simulationLC =
+            new LCPClientIAS(address(this), true, vm.readFileBinary("./test/data/certs/simulation_rootca.der"));
     }
 
     function testIASClientPermissioned() public {
@@ -81,7 +83,7 @@ contract LCPClientTest is BasicTest {
         string memory commandAvrFile,
         uint256 commandStartNumber
     ) internal {
-        LCPClient lc = testContext.lc;
+        LCPClientIAS lc = testContext.lc;
         {
             ClientState.Data memory clientState;
             address[] memory opWallets;
@@ -112,7 +114,7 @@ contract LCPClientTest is BasicTest {
                 createRegisterEnclaveKeyMessage(commandAvrFile, testContext.opWallet);
             // the following staticcall is expected to succeed because registerEnclaveKey does not update the state if the message contains an enclave key already registered
             (bool success,) = address(lc).staticcall(
-                abi.encodeWithSelector(LCPClientBase.registerEnclaveKey.selector, clientId, message)
+                abi.encodeWithSelector(LCPClientIASBase.registerEnclaveKey.selector, clientId, message)
             );
             require(success, "failed to register duplicated enclave key");
         }
