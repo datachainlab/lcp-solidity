@@ -63,13 +63,12 @@ abstract contract LCPClientZKDCAPBase is LCPClientCommon {
             _initializeClient(clientStorage, protoClientState, protoConsensusState);
         require(clientState.zkdcap_verifier_info.length == 64, "invalid verifier info length");
         require(clientState.zkdcap_verifier_info[0] == 0x01, "invalid verifier info version");
-        // 33..64 bytes: image ID
-        bytes32 imageId;
         bytes memory verifierInfo = clientState.zkdcap_verifier_info;
+        // 32..64 bytes: image ID
+        bytes32 imageId;
         assembly {
-            imageId := mload(add(verifierInfo, 33))
+            imageId := mload(add(add(verifierInfo, 32), 32))
         }
-        assert(imageId != 0);
         clientStorage.zkDCAPRisc0ImageId = imageId;
         return clientState.latest_height;
     }
