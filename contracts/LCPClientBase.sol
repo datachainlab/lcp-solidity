@@ -562,7 +562,7 @@ abstract contract LCPClientCommon is ILightClient, ILCPClientErrors {
 abstract contract LCPClientBase is LCPClientCommon {
     using IBCHeight for Height.Data;
 
-    /// @dev if developmentMode is true, the client allows the remote attestation of IAS in development.
+    /// @dev if developmentMode is true, the client allows the target enclave which is debug mode enabled.
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
     bool internal immutable developmentMode;
 

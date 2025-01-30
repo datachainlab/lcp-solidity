@@ -19,6 +19,7 @@ library DCAPValidator {
         bytes32 sgxIntelRootCAHash;
         uint64 validityNotBeforeMax;
         uint64 validityNotAfterMin;
+        bool enclaveDebugEnabled;
         bytes32 mrenclave;
         address enclaveKey;
         address operator;
@@ -37,7 +38,9 @@ library DCAPValidator {
         output.validityNotAfterMin = uint64(bytes8(commit[55:63]));
 
         uint256 sgxQuoteBodyOffset = 63;
-        uint256 mrenclaveOffset = sgxQuoteBodyOffset + 16 + 4 + 28 + 16;
+        uint256 attrbutesOffset = sgxQuoteBodyOffset + 16 + 4 + 28;
+        output.enclaveDebugEnabled = uint8(commit[attrbutesOffset]) & uint8(2) != 0;
+        uint256 mrenclaveOffset = attrbutesOffset + 16;
         output.mrenclave = bytes32(commit[mrenclaveOffset:mrenclaveOffset + 32]);
 
         uint256 reportDataOffset = sgxQuoteBodyOffset + 320;

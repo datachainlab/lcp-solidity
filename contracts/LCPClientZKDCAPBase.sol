@@ -23,9 +23,16 @@ abstract contract LCPClientZKDCAPBase is LCPClientCommon {
 
     // --------------------- Immutable fields ---------------------
 
+    /// @dev if developmentMode is true, the client allows the target enclave which is debug mode enabled.
+    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
+    bool internal immutable developmentMode;
+
     /// @notice The hash of the root CA's public key certificate.
+    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
     bytes32 public immutable intelRootCAHash;
+
     /// @notice RISC Zero verifier contract address.
+    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
     IRiscZeroVerifier public immutable riscZeroVerifier;
 
     // --------------------- Storage fields ---------------------
@@ -37,12 +44,13 @@ abstract contract LCPClientZKDCAPBase is LCPClientCommon {
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     /// @param ibcHandler_ the address of the IBC handler contract
-    constructor(address ibcHandler_, bytes memory intelRootCA, address riscZeroVerifier_)
+    constructor(address ibcHandler_, bool developmentMode_, bytes memory intelRootCA, address riscZeroVerifier_)
         LCPClientCommon(ibcHandler_)
     {
         require(intelRootCA.length != 0 && riscZeroVerifier_ != address(0), "invalid parameters");
         intelRootCAHash = keccak256(intelRootCA);
         riscZeroVerifier = IRiscZeroVerifier(riscZeroVerifier_);
+        developmentMode = developmentMode_;
     }
 
     // --------------------- Public methods ---------------------
@@ -121,6 +129,7 @@ abstract contract LCPClientZKDCAPBase is LCPClientCommon {
                 "disallowed advisory ID"
             );
         }
+        require(output.enclaveDebugEnabled == developmentMode, "unexpected enclave debug mode");
 
         // if `operator_signature` is empty, the operator address is zero
         address operator;
