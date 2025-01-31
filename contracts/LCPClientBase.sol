@@ -34,11 +34,14 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
 
     struct ClientStorage {
         ProtoClientState.Data clientState;
+        uint256[50] __gap0;
         RemoteAttestation.ReportAllowedStatus allowedStatuses;
+        uint256[50] __gap1;
         // height => consensus state
         mapping(uint128 => ConsensusState) consensusStates;
         // enclave key => EKInfo
         mapping(address => EKInfo) ekInfos;
+        bytes32 zkDCAPRisc0ImageId;
     }
 
     // --------------------- Immutable fields ---------------------

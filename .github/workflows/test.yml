@@ -2,7 +2,7 @@ name: Test
 on: [pull_request]
 
 env:
-  SOLC_VERSION: 0.8.20
+  SOLC_VERSION: 0.8.28
 
 jobs:
   contract-test:
