@@ -96,7 +96,7 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
     /**
      * @dev routeUpdateClient returns the calldata to the receiving function of the client message.
      *      Light client contract may encode a client message as other encoding scheme(e.g. ethereum ABI)
-     *      Check ADR-001 for details.
+     *      Check ibc-solidity's ADR-001 for details.
      */
     function routeUpdateClient(string calldata clientId, bytes calldata protoClientMessage)
         public
@@ -116,10 +116,14 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
         }
     }
 
+    /**
+     * @dev zkDCAPRegisterEnclaveKey validates the zkDCAP proof and registers the enclave key from the commit.
+     */
     function zkDCAPRegisterEnclaveKey(string calldata clientId, ZKDCAPRegisterEnclaveKeyMessage.Data calldata message)
         public
         returns (Height.Data[] memory heights)
     {
+        // Currently, the client only supports RISC Zero zkVM
         if (message.zkvm_type != ZKVM_TYPE_RISC_ZERO) {
             revert LCPClientZKDCAPUnsupportedZKVMType();
         }
@@ -127,6 +131,7 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
         if (clientStorage.zkDCAPRisc0ImageId == bytes32(0)) {
             revert LCPClientZKDCAPRisc0ImageIdNotSet();
         }
+        // NOTE: the client must revert if the proof is invalid
         riscZeroVerifier.verify(message.proof, clientStorage.zkDCAPRisc0ImageId, sha256(message.commit));
         DCAPValidator.Output memory output = DCAPValidator.parseCommit(message.commit);
         if (output.sgxIntelRootCAHash != intelRootCAHash) {
@@ -136,12 +141,18 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
             revert LCPClientClientStateUnexpectedMrenclave();
         }
 
+        // Check if the TCB status and advisory IDs are allowed
+
+        // if the TCB status is not up-to-date, the client should check if the status is allowed
         if (
-            clientStorage.allowedStatuses.allowedQuoteStatuses[DCAPValidator.tcbStatusToString(output.tcbStatus)]
-                != RemoteAttestation.FLAG_ALLOWED
+            output.tcbStatus != DCAPValidator.TCB_STATUS_UP_TO_DATE
+                && clientStorage.allowedStatuses.allowedQuoteStatuses[DCAPValidator.tcbStatusToString(output.tcbStatus)]
+                    != RemoteAttestation.FLAG_ALLOWED
         ) {
             revert LCPClientZKDCAPDisallowedTCBStatus();
         }
+
+        // if the advisory IDs are not empty, the client should check if the advisories are allowed
         for (uint256 i = 0; i < output.advisoryIDs.length; i++) {
             if (
                 clientStorage.allowedStatuses.allowedAdvisories[output.advisoryIDs[i]] != RemoteAttestation.FLAG_ALLOWED
@@ -149,8 +160,15 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
                 revert LCPClientZKDCAPDisallowedAdvisoryID();
             }
         }
+
+        // check if the `output.enclaveDebugEnabled` and `developmentMode` are consistent
         if (output.enclaveDebugEnabled != developmentMode) {
             revert LCPClientZKDCAPUnexpectedEnclaveDebugMode();
+        }
+
+        // check if the validity period of the output is valid at the current block timestamp
+        if (block.timestamp < output.validityNotBeforeMax || block.timestamp > output.validityNotAfterMin) {
+            revert LCPClientZKDCAPOutputNotValid();
         }
 
         // if `operator_signature` is empty, the operator address is zero
@@ -168,9 +186,7 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
         if (output.operator != address(0) && output.operator != operator) {
             revert LCPClientAVRUnexpectedOperator(operator, output.operator);
         }
-        if (block.timestamp < output.validityNotBeforeMax || block.timestamp > output.validityNotAfterMin) {
-            revert LCPClientZKDCAPOutputNotValid();
-        }
+
         uint64 expiredAt = output.validityNotAfterMin;
         EKInfo storage ekInfo = clientStorage.ekInfos[output.enclaveKey];
         if (ekInfo.expiredAt != 0) {
