@@ -132,8 +132,10 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
             revert LCPClientZKDCAPRisc0ImageIdNotSet();
         }
         // NOTE: the client must revert if the proof is invalid
-        riscZeroVerifier.verify(message.proof, clientStorage.zkDCAPRisc0ImageId, sha256(message.commit));
-        DCAPValidator.Output memory output = DCAPValidator.parseCommit(message.commit);
+        riscZeroVerifier.verify(
+            message.proof, clientStorage.zkDCAPRisc0ImageId, sha256(message.quote_verification_output)
+        );
+        DCAPValidator.Output memory output = DCAPValidator.parseOutput(message.quote_verification_output);
         if (output.sgxIntelRootCAHash != intelRootCAHash) {
             revert LCPClientZKDCAPUnexpectedIntelRootCAHash();
         }
@@ -177,7 +179,7 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
             operator = verifyECDSASignature(
                 keccak256(
                     LCPOperator.computeEIP712ZKDCAPRegisterEnclaveKey(
-                        clientStorage.clientState.zkdcap_verifier_infos[0], keccak256(message.commit)
+                        clientStorage.clientState.zkdcap_verifier_infos[0], keccak256(message.quote_verification_output)
                     )
                 ),
                 message.operator_signature

@@ -647,7 +647,7 @@ library IbcLightclientsLcpV1ZKDCAPRegisterEnclaveKeyMessage {
   //struct definition
   struct Data {
     uint32 zkvm_type;
-    bytes commit;
+    bytes quote_verification_output;
     bytes proof;
     bytes operator_signature;
   }
@@ -701,7 +701,7 @@ library IbcLightclientsLcpV1ZKDCAPRegisterEnclaveKeyMessage {
         pointer += _read_zkvm_type(pointer, bs, r);
       } else
       if (fieldId == 2) {
-        pointer += _read_commit(pointer, bs, r);
+        pointer += _read_quote_verification_output(pointer, bs, r);
       } else
       if (fieldId == 3) {
         pointer += _read_proof(pointer, bs, r);
@@ -743,13 +743,13 @@ library IbcLightclientsLcpV1ZKDCAPRegisterEnclaveKeyMessage {
    * @param r The in-memory struct
    * @return The number of bytes decoded
    */
-  function _read_commit(
+  function _read_quote_verification_output(
     uint256 p,
     bytes memory bs,
     Data memory r
   ) internal pure returns (uint) {
     (bytes memory x, uint256 sz) = ProtoBufRuntime._decode_bytes(p, bs);
-    r.commit = x;
+    r.quote_verification_output = x;
     return sz;
   }
 
@@ -829,14 +829,14 @@ library IbcLightclientsLcpV1ZKDCAPRegisterEnclaveKeyMessage {
     );
     pointer += ProtoBufRuntime._encode_uint32(r.zkvm_type, pointer, bs);
     }
-    if (r.commit.length != 0) {
+    if (r.quote_verification_output.length != 0) {
     pointer += ProtoBufRuntime._encode_key(
       2,
       ProtoBufRuntime.WireType.LengthDelim,
       pointer,
       bs
     );
-    pointer += ProtoBufRuntime._encode_bytes(r.commit, pointer, bs);
+    pointer += ProtoBufRuntime._encode_bytes(r.quote_verification_output, pointer, bs);
     }
     if (r.proof.length != 0) {
     pointer += ProtoBufRuntime._encode_key(
@@ -900,7 +900,7 @@ library IbcLightclientsLcpV1ZKDCAPRegisterEnclaveKeyMessage {
   ) internal pure returns (uint) {
     uint256 e;
     e += 1 + ProtoBufRuntime._sz_uint32(r.zkvm_type);
-    e += 1 + ProtoBufRuntime._sz_lendelim(r.commit.length);
+    e += 1 + ProtoBufRuntime._sz_lendelim(r.quote_verification_output.length);
     e += 1 + ProtoBufRuntime._sz_lendelim(r.proof.length);
     e += 1 + ProtoBufRuntime._sz_lendelim(r.operator_signature.length);
     return e;
@@ -915,7 +915,7 @@ library IbcLightclientsLcpV1ZKDCAPRegisterEnclaveKeyMessage {
     return false;
   }
 
-  if (r.commit.length != 0) {
+  if (r.quote_verification_output.length != 0) {
     return false;
   }
 
@@ -939,7 +939,7 @@ library IbcLightclientsLcpV1ZKDCAPRegisterEnclaveKeyMessage {
    */
   function store(Data memory input, Data storage output) internal {
     output.zkvm_type = input.zkvm_type;
-    output.commit = input.commit;
+    output.quote_verification_output = input.quote_verification_output;
     output.proof = input.proof;
     output.operator_signature = input.operator_signature;
 
