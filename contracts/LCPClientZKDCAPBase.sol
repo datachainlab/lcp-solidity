@@ -147,9 +147,8 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
 
         // if the TCB status is not up-to-date, the client should check if the status is allowed
         if (
-            output.tcbStatus != DCAPValidator.TCB_STATUS_UP_TO_DATE
-                && clientStorage.allowedStatuses.allowedQuoteStatuses[DCAPValidator.tcbStatusToString(output.tcbStatus)]
-                    != RemoteAttestation.FLAG_ALLOWED
+            keccak256(bytes(output.tcbStatus)) != DCAPValidator.TCB_STATUS_UP_TO_DATE_KECCAK256_HASH
+                && clientStorage.allowedStatuses.allowedQuoteStatuses[output.tcbStatus] != RemoteAttestation.FLAG_ALLOWED
         ) {
             revert LCPClientZKDCAPDisallowedTCBStatus();
         }

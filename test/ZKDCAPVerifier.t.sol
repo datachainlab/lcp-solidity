@@ -66,7 +66,7 @@ contract ZKDCAPVerifierTest is BasicTest {
         assertEq(
             output.sgxIntelRootCAHash, bytes32(hex"a1acc73eb45794fa1734f14d882e91925b6006f79d3bb2460df9d01b333d7009")
         );
-        assertTrue(output.tcbStatus == DCAPValidator.TCB_STATUS_SW_HARDENING_NEEDED);
+        assertEq(output.tcbStatus, DCAPValidator.TCB_STATUS_SW_HARDENING_NEEDED_STRING);
         assertFalse(output.enclaveDebugEnabled);
         assertEq(output.mrenclave, bytes32(hex"26ae825ffce1cf9dcdf682614f4d36704e7bca087bbb5264aca9301d7824cec8"));
         assertEq(output.enclaveKey, address(bytes20(hex"c170f98628b3a01b15654fbfaad1aaf3419b2c3c")));
@@ -83,7 +83,7 @@ contract ZKDCAPVerifierTest is BasicTest {
         assertEq(
             output.sgxIntelRootCAHash, bytes32(hex"d61f4e3d30011899d16131d4c940ef1f75ec53d7f9a70cbb3aab1f5ab0235b2b")
         );
-        assertTrue(output.tcbStatus == DCAPValidator.TCB_STATUS_UP_TO_DATE);
+        assertEq(output.tcbStatus, DCAPValidator.TCB_STATUS_UP_TO_DATE_STRING);
         assertTrue(output.enclaveDebugEnabled);
         assertEq(output.mrenclave, bytes32(hex"3a354bf808b89267b19c6b390ee484d1bee8d301d0058fac511a900d5d0a6f68"));
         assertEq(output.enclaveKey, address(bytes20(hex"9c69756b02dd84ad5d7a11758025ae4a7edf938d")));
@@ -98,7 +98,7 @@ contract ZKDCAPVerifierTest is BasicTest {
         assertEq(
             output.sgxIntelRootCAHash, bytes32(hex"a1acc73eb45794fa1734f14d882e91925b6006f79d3bb2460df9d01b333d7009")
         );
-        assertTrue(output.tcbStatus == DCAPValidator.TCB_STATUS_SW_HARDENING_NEEDED);
+        assertEq(output.tcbStatus, DCAPValidator.TCB_STATUS_SW_HARDENING_NEEDED_STRING);
         assertTrue(output.enclaveDebugEnabled);
         assertEq(output.mrenclave, bytes32(hex"26ae825ffce1cf9dcdf682614f4d36704e7bca087bbb5264aca9301d7824cec8"));
         assertEq(output.enclaveKey, address(bytes20(hex"988143c0a5645a38c7900b3102859d136f3bcc2c")));
