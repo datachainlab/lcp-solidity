@@ -62,6 +62,8 @@ interface ILCPClientErrors {
     error LCPClientZKDCAPInvalidConstructorParams();
     error LCPClientZKDCAPOutputNotValid();
     error LCPClientZKDCAPUnrecognizedTCBStatus();
+    error LCPClientZKDCAPCurrentTcbEvaluationDataNumberNotSet();
+    error LCPClientZKDCAPInvalidNextTcbEvaluationDataNumberInfo();
     error LCPClientZKDCAPInvalidVerifierInfos();
     error LCPClientZKDCAPInvalidVerifierInfoLength();
     error LCPClientZKDCAPInvalidVerifierInfoZKVMType();
@@ -72,4 +74,5 @@ interface ILCPClientErrors {
     error LCPClientZKDCAPDisallowedTCBStatus();
     error LCPClientZKDCAPDisallowedAdvisoryID();
     error LCPClientZKDCAPUnexpectedEnclaveDebugMode();
+    error LCPClientZKDCAPUnexpectedTcbEvaluationDataNumber(uint64 currentTcbEvaluationDataNumber);
 }

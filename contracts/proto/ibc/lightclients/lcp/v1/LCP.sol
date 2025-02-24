@@ -1440,6 +1440,10 @@ library IbcLightclientsLcpV1ClientState {
     uint64 operators_nonce;
     uint64 operators_threshold_numerator;
     uint64 operators_threshold_denominator;
+    uint32 current_tcb_evaluation_data_number;
+    uint32 tcb_evaluation_data_number_update_grace_period;
+    uint32 next_tcb_evaluation_data_number;
+    uint64 next_tcb_evaluation_data_number_update_time;
     bytes[] zkdcap_verifier_infos;
   }
 
@@ -1480,7 +1484,7 @@ library IbcLightclientsLcpV1ClientState {
     returns (Data memory, uint)
   {
     Data memory r;
-    uint[12] memory counters;
+    uint[16] memory counters;
     uint256 fieldId;
     ProtoBufRuntime.WireType wireType;
     uint256 bytesRead;
@@ -1520,6 +1524,18 @@ library IbcLightclientsLcpV1ClientState {
         pointer += _read_operators_threshold_denominator(pointer, bs, r);
       } else
       if (fieldId == 11) {
+        pointer += _read_current_tcb_evaluation_data_number(pointer, bs, r);
+      } else
+      if (fieldId == 12) {
+        pointer += _read_tcb_evaluation_data_number_update_grace_period(pointer, bs, r);
+      } else
+      if (fieldId == 13) {
+        pointer += _read_next_tcb_evaluation_data_number(pointer, bs, r);
+      } else
+      if (fieldId == 14) {
+        pointer += _read_next_tcb_evaluation_data_number_update_time(pointer, bs, r);
+      } else
+      if (fieldId == 15) {
         pointer += _read_unpacked_repeated_zkdcap_verifier_infos(pointer, bs, nil(), counters);
       } else
       {
@@ -1540,9 +1556,9 @@ library IbcLightclientsLcpV1ClientState {
       require(r.operators.length == 0);
       r.operators = new bytes[](counters[7]);
     }
-    if (counters[11] > 0) {
+    if (counters[15] > 0) {
       require(r.zkdcap_verifier_infos.length == 0);
-      r.zkdcap_verifier_infos = new bytes[](counters[11]);
+      r.zkdcap_verifier_infos = new bytes[](counters[15]);
     }
 
     while (pointer < offset + sz) {
@@ -1557,7 +1573,7 @@ library IbcLightclientsLcpV1ClientState {
       if (fieldId == 7) {
         pointer += _read_unpacked_repeated_operators(pointer, bs, r, counters);
       } else
-      if (fieldId == 11) {
+      if (fieldId == 15) {
         pointer += _read_unpacked_repeated_zkdcap_verifier_infos(pointer, bs, r, counters);
       } else
       {
@@ -1649,7 +1665,7 @@ library IbcLightclientsLcpV1ClientState {
     uint256 p,
     bytes memory bs,
     Data memory r,
-    uint[12] memory counters
+    uint[16] memory counters
   ) internal pure returns (uint) {
     /**
      * if `r` is NULL, then only counting the number of fields.
@@ -1676,7 +1692,7 @@ library IbcLightclientsLcpV1ClientState {
     uint256 p,
     bytes memory bs,
     Data memory r,
-    uint[12] memory counters
+    uint[16] memory counters
   ) internal pure returns (uint) {
     /**
      * if `r` is NULL, then only counting the number of fields.
@@ -1703,7 +1719,7 @@ library IbcLightclientsLcpV1ClientState {
     uint256 p,
     bytes memory bs,
     Data memory r,
-    uint[12] memory counters
+    uint[16] memory counters
   ) internal pure returns (uint) {
     /**
      * if `r` is NULL, then only counting the number of fields.
@@ -1774,6 +1790,74 @@ library IbcLightclientsLcpV1ClientState {
    * @param p The offset of bytes array to start decode
    * @param bs The bytes array to be decoded
    * @param r The in-memory struct
+   * @return The number of bytes decoded
+   */
+  function _read_current_tcb_evaluation_data_number(
+    uint256 p,
+    bytes memory bs,
+    Data memory r
+  ) internal pure returns (uint) {
+    (uint32 x, uint256 sz) = ProtoBufRuntime._decode_uint32(p, bs);
+    r.current_tcb_evaluation_data_number = x;
+    return sz;
+  }
+
+  /**
+   * @dev The decoder for reading a field
+   * @param p The offset of bytes array to start decode
+   * @param bs The bytes array to be decoded
+   * @param r The in-memory struct
+   * @return The number of bytes decoded
+   */
+  function _read_tcb_evaluation_data_number_update_grace_period(
+    uint256 p,
+    bytes memory bs,
+    Data memory r
+  ) internal pure returns (uint) {
+    (uint32 x, uint256 sz) = ProtoBufRuntime._decode_uint32(p, bs);
+    r.tcb_evaluation_data_number_update_grace_period = x;
+    return sz;
+  }
+
+  /**
+   * @dev The decoder for reading a field
+   * @param p The offset of bytes array to start decode
+   * @param bs The bytes array to be decoded
+   * @param r The in-memory struct
+   * @return The number of bytes decoded
+   */
+  function _read_next_tcb_evaluation_data_number(
+    uint256 p,
+    bytes memory bs,
+    Data memory r
+  ) internal pure returns (uint) {
+    (uint32 x, uint256 sz) = ProtoBufRuntime._decode_uint32(p, bs);
+    r.next_tcb_evaluation_data_number = x;
+    return sz;
+  }
+
+  /**
+   * @dev The decoder for reading a field
+   * @param p The offset of bytes array to start decode
+   * @param bs The bytes array to be decoded
+   * @param r The in-memory struct
+   * @return The number of bytes decoded
+   */
+  function _read_next_tcb_evaluation_data_number_update_time(
+    uint256 p,
+    bytes memory bs,
+    Data memory r
+  ) internal pure returns (uint) {
+    (uint64 x, uint256 sz) = ProtoBufRuntime._decode_uint64(p, bs);
+    r.next_tcb_evaluation_data_number_update_time = x;
+    return sz;
+  }
+
+  /**
+   * @dev The decoder for reading a field
+   * @param p The offset of bytes array to start decode
+   * @param bs The bytes array to be decoded
+   * @param r The in-memory struct
    * @param counters The counters for repeated fields
    * @return The number of bytes decoded
    */
@@ -1781,17 +1865,17 @@ library IbcLightclientsLcpV1ClientState {
     uint256 p,
     bytes memory bs,
     Data memory r,
-    uint[12] memory counters
+    uint[16] memory counters
   ) internal pure returns (uint) {
     /**
      * if `r` is NULL, then only counting the number of fields.
      */
     (bytes memory x, uint256 sz) = ProtoBufRuntime._decode_bytes(p, bs);
     if (isNil(r)) {
-      counters[11] += 1;
+      counters[15] += 1;
     } else {
-      r.zkdcap_verifier_infos[r.zkdcap_verifier_infos.length - counters[11]] = x;
-      counters[11] -= 1;
+      r.zkdcap_verifier_infos[r.zkdcap_verifier_infos.length - counters[15]] = x;
+      counters[15] -= 1;
     }
     return sz;
   }
@@ -1945,10 +2029,46 @@ library IbcLightclientsLcpV1ClientState {
     );
     pointer += ProtoBufRuntime._encode_uint64(r.operators_threshold_denominator, pointer, bs);
     }
+    if (r.current_tcb_evaluation_data_number != 0) {
+    pointer += ProtoBufRuntime._encode_key(
+      11,
+      ProtoBufRuntime.WireType.Varint,
+      pointer,
+      bs
+    );
+    pointer += ProtoBufRuntime._encode_uint32(r.current_tcb_evaluation_data_number, pointer, bs);
+    }
+    if (r.tcb_evaluation_data_number_update_grace_period != 0) {
+    pointer += ProtoBufRuntime._encode_key(
+      12,
+      ProtoBufRuntime.WireType.Varint,
+      pointer,
+      bs
+    );
+    pointer += ProtoBufRuntime._encode_uint32(r.tcb_evaluation_data_number_update_grace_period, pointer, bs);
+    }
+    if (r.next_tcb_evaluation_data_number != 0) {
+    pointer += ProtoBufRuntime._encode_key(
+      13,
+      ProtoBufRuntime.WireType.Varint,
+      pointer,
+      bs
+    );
+    pointer += ProtoBufRuntime._encode_uint32(r.next_tcb_evaluation_data_number, pointer, bs);
+    }
+    if (r.next_tcb_evaluation_data_number_update_time != 0) {
+    pointer += ProtoBufRuntime._encode_key(
+      14,
+      ProtoBufRuntime.WireType.Varint,
+      pointer,
+      bs
+    );
+    pointer += ProtoBufRuntime._encode_uint64(r.next_tcb_evaluation_data_number_update_time, pointer, bs);
+    }
     if (r.zkdcap_verifier_infos.length != 0) {
     for(i = 0; i < r.zkdcap_verifier_infos.length; i++) {
       pointer += ProtoBufRuntime._encode_key(
-        11,
+        15,
         ProtoBufRuntime.WireType.LengthDelim,
         pointer,
         bs)
@@ -2015,6 +2135,10 @@ library IbcLightclientsLcpV1ClientState {
     e += 1 + ProtoBufRuntime._sz_uint64(r.operators_nonce);
     e += 1 + ProtoBufRuntime._sz_uint64(r.operators_threshold_numerator);
     e += 1 + ProtoBufRuntime._sz_uint64(r.operators_threshold_denominator);
+    e += 1 + ProtoBufRuntime._sz_uint32(r.current_tcb_evaluation_data_number);
+    e += 1 + ProtoBufRuntime._sz_uint32(r.tcb_evaluation_data_number_update_grace_period);
+    e += 1 + ProtoBufRuntime._sz_uint32(r.next_tcb_evaluation_data_number);
+    e += 1 + ProtoBufRuntime._sz_uint64(r.next_tcb_evaluation_data_number_update_time);
     for(i = 0; i < r.zkdcap_verifier_infos.length; i++) {
       e += 1 + ProtoBufRuntime._sz_lendelim(r.zkdcap_verifier_infos[i].length);
     }
@@ -2062,6 +2186,22 @@ library IbcLightclientsLcpV1ClientState {
     return false;
   }
 
+  if (r.current_tcb_evaluation_data_number != 0) {
+    return false;
+  }
+
+  if (r.tcb_evaluation_data_number_update_grace_period != 0) {
+    return false;
+  }
+
+  if (r.next_tcb_evaluation_data_number != 0) {
+    return false;
+  }
+
+  if (r.next_tcb_evaluation_data_number_update_time != 0) {
+    return false;
+  }
+
   if (r.zkdcap_verifier_infos.length != 0) {
     return false;
   }
@@ -2087,6 +2227,10 @@ library IbcLightclientsLcpV1ClientState {
     output.operators_nonce = input.operators_nonce;
     output.operators_threshold_numerator = input.operators_threshold_numerator;
     output.operators_threshold_denominator = input.operators_threshold_denominator;
+    output.current_tcb_evaluation_data_number = input.current_tcb_evaluation_data_number;
+    output.tcb_evaluation_data_number_update_grace_period = input.tcb_evaluation_data_number_update_grace_period;
+    output.next_tcb_evaluation_data_number = input.next_tcb_evaluation_data_number;
+    output.next_tcb_evaluation_data_number_update_time = input.next_tcb_evaluation_data_number_update_time;
     output.zkdcap_verifier_infos = input.zkdcap_verifier_infos;
 
   }
