@@ -8,7 +8,7 @@ library LCPOperator {
         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract,bytes32 salt)");
     bytes32 internal constant TYPEHASH_REGISTER_ENCLAVE_KEY = keccak256("RegisterEnclaveKey(string avr)");
     bytes32 internal constant TYPEHASH_ZKDCAP_REGISTER_ENCLAVE_KEY =
-        keccak256("ZKDCAPRegisterEnclaveKey(bytes zkDCAPVerifierInfo,bytes32 commitHash)");
+        keccak256("ZKDCAPRegisterEnclaveKey(bytes zkDCAPVerifierInfo,bytes32 outputHash)");
     bytes32 internal constant TYPEHASH_UPDATE_OPERATORS = keccak256(
         "UpdateOperators(string clientId,uint64 nonce,address[] newOperators,uint64 thresholdNumerator,uint64 thresholdDenominator)"
     );
@@ -56,7 +56,7 @@ library LCPOperator {
         );
     }
 
-    function computeEIP712ZKDCAPRegisterEnclaveKey(bytes memory zkdcapVerifierInfo, bytes32 commitHash)
+    function computeEIP712ZKDCAPRegisterEnclaveKey(bytes memory zkdcapVerifierInfo, bytes32 outputHash)
         internal
         pure
         returns (bytes memory)
@@ -64,7 +64,7 @@ library LCPOperator {
         return abi.encodePacked(
             hex"1901",
             DOMAIN_SEPARATOR_LCP_CLIENT,
-            keccak256(abi.encode(TYPEHASH_ZKDCAP_REGISTER_ENCLAVE_KEY, keccak256(zkdcapVerifierInfo), commitHash))
+            keccak256(abi.encode(TYPEHASH_ZKDCAP_REGISTER_ENCLAVE_KEY, keccak256(zkdcapVerifierInfo), outputHash))
         );
     }
 

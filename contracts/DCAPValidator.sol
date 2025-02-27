@@ -48,6 +48,7 @@ library DCAPValidator {
      */
     struct Output {
         string tcbStatus;
+        uint32 minTcbEvaluationDataNumber;
         bytes32 sgxIntelRootCAHash;
         uint64 validityNotBeforeMax;
         uint64 validityNotAfterMin;
@@ -70,6 +71,7 @@ library DCAPValidator {
 
         Output memory output;
         output.tcbStatus = tcbStatusToString(uint8(outputBytes[8]));
+        output.minTcbEvaluationDataNumber = uint32(bytes4(outputBytes[9:13]));
         output.sgxIntelRootCAHash = bytes32(outputBytes[19:51]);
         output.validityNotBeforeMax = uint64(bytes8(outputBytes[51:59]));
         output.validityNotAfterMin = uint64(bytes8(outputBytes[59:67]));

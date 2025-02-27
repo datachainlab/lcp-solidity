@@ -3,6 +3,7 @@ pragma solidity ^0.8.12;
 
 import {IBCHeight} from "@hyperledger-labs/yui-ibc-solidity/contracts/core/02-client/IBCHeight.sol";
 import {Height} from "@hyperledger-labs/yui-ibc-solidity/contracts/proto/Client.sol";
+import {IIBCHandler} from "@hyperledger-labs/yui-ibc-solidity/contracts/core/25-handler/IIBCHandler.sol";
 import {IRiscZeroVerifier} from "risc0-ethereum/contracts/src/IRiscZeroVerifier.sol";
 import {
     IbcLightclientsLcpV1ClientState as ProtoClientState,
@@ -22,7 +23,14 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
 
     // --------------------- Events ---------------------
 
-    event ZKDCAPRegisteredEnclaveKey(string clientId, address enclaveKey, uint256 expiredAt, address operator);
+    /// @dev Emitted when an enclave key from zkDCAP quote is registered.
+    event LCPClientZKDCAPRegisteredEnclaveKey(string clientId, address enclaveKey, uint256 expiredAt, address operator);
+
+    /// @dev Emitted when the current TCB evaluation data number is updated.
+    event LCPClientZKDCAPUpdateCurrentTcbEvaluationDataNumber(string clientId, uint32 tcbEvaluationDataNumber);
+    /// @dev Emitted when the next TCB evaluation data number is updated.
+    ///      This event is emitted only when the new next TCB evaluation data number is set.
+    event LCPClientZKDCAPUpdateNextTcbEvaluationDataNumber(string clientId, uint32 tcbEvaluationDataNumber);
 
     // --------------------- Immutable fields ---------------------
 
@@ -74,22 +82,27 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
         ClientStorage storage clientStorage = clientStorages[clientId];
         (ProtoClientState.Data memory clientState,) =
             _initializeClient(clientStorage, protoClientState, protoConsensusState);
+        if (clientState.current_tcb_evaluation_data_number == 0) {
+            revert LCPClientZKDCAPCurrentTcbEvaluationDataNumberNotSet();
+        }
+        // check if both next_tcb_evaluation_data_number and next_tcb_evaluation_data_number_update_time are zero or non-zero
+        if (
+            (clientState.next_tcb_evaluation_data_number == 0)
+                != (clientState.next_tcb_evaluation_data_number_update_time == 0)
+        ) {
+            revert LCPClientZKDCAPInvalidNextTcbEvaluationDataNumberInfo();
+        }
+        if (
+            clientState.next_tcb_evaluation_data_number != 0
+                && clientState.current_tcb_evaluation_data_number >= clientState.next_tcb_evaluation_data_number
+        ) {
+            revert LCPClientZKDCAPInvalidNextTcbEvaluationDataNumberInfo();
+        }
         if (clientState.zkdcap_verifier_infos.length != 1) {
             revert LCPClientZKDCAPInvalidVerifierInfos();
         }
-        bytes memory verifierInfo = clientState.zkdcap_verifier_infos[0];
-        if (verifierInfo.length != 64) {
-            revert LCPClientZKDCAPInvalidVerifierInfoLength();
-        }
-        if (uint8(verifierInfo[0]) != ZKVM_TYPE_RISC_ZERO) {
-            revert LCPClientZKDCAPInvalidVerifierInfoZKVMType();
-        }
-        // 32..64 bytes: image ID
-        bytes32 imageId;
-        assembly {
-            imageId := mload(add(add(verifierInfo, 32), 32))
-        }
-        clientStorage.zkDCAPRisc0ImageId = imageId;
+        // Currently, the client only supports RISC Zero zkVM
+        clientStorage.zkDCAPRisc0ImageId = parseRiscZeroVerifierInfo(clientState.zkdcap_verifier_infos[0]);
         return clientState.latest_height;
     }
 
@@ -131,6 +144,7 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
         if (clientStorage.zkDCAPRisc0ImageId == bytes32(0)) {
             revert LCPClientZKDCAPRisc0ImageIdNotSet();
         }
+        ProtoClientState.Data storage clientState = clientStorage.clientState;
         // NOTE: the client must revert if the proof is invalid
         riscZeroVerifier.verify(
             message.proof, clientStorage.zkDCAPRisc0ImageId, sha256(message.quote_verification_output)
@@ -139,7 +153,7 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
         if (output.sgxIntelRootCAHash != intelRootCAHash) {
             revert LCPClientZKDCAPUnexpectedIntelRootCAHash();
         }
-        if (output.mrenclave != bytes32(clientStorage.clientState.mrenclave)) {
+        if (output.mrenclave != bytes32(clientState.mrenclave)) {
             revert LCPClientClientStateUnexpectedMrenclave();
         }
 
@@ -162,14 +176,30 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
             }
         }
 
+        // check if the validity period of the output is valid at the current block timestamp
+        if (block.timestamp < output.validityNotBeforeMax || block.timestamp > output.validityNotAfterMin) {
+            revert LCPClientZKDCAPOutputNotValid();
+        }
+
         // check if the `output.enclaveDebugEnabled` and `developmentMode` are consistent
         if (output.enclaveDebugEnabled != developmentMode) {
             revert LCPClientZKDCAPUnexpectedEnclaveDebugMode();
         }
 
-        // check if the validity period of the output is valid at the current block timestamp
-        if (block.timestamp < output.validityNotBeforeMax || block.timestamp > output.validityNotAfterMin) {
-            revert LCPClientZKDCAPOutputNotValid();
+        (bool currentUpdated, bool nextUpdated) =
+            checkAndUpdateTcbEvaluationDataNumber(clientId, output.minTcbEvaluationDataNumber);
+        if (currentUpdated) {
+            emit LCPClientZKDCAPUpdateCurrentTcbEvaluationDataNumber(
+                clientId, clientState.current_tcb_evaluation_data_number
+            );
+        }
+        if (nextUpdated) {
+            emit LCPClientZKDCAPUpdateNextTcbEvaluationDataNumber(clientId, clientState.next_tcb_evaluation_data_number);
+        }
+        if (currentUpdated || nextUpdated) {
+            // update the commitment of the client state in the IBC handler
+            // `heights` is always empty because the consensus state is never updated in this function
+            IIBCHandler(ibcHandler).updateClientCommitments(clientId, heights);
         }
 
         // if `operator_signature` is empty, the operator address is zero
@@ -178,7 +208,7 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
             operator = verifyECDSASignature(
                 keccak256(
                     LCPOperator.computeEIP712ZKDCAPRegisterEnclaveKey(
-                        clientStorage.clientState.zkdcap_verifier_infos[0], keccak256(message.quote_verification_output)
+                        clientState.zkdcap_verifier_infos[0], keccak256(message.quote_verification_output)
                     )
                 ),
                 message.operator_signature
@@ -197,15 +227,135 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
             if (ekInfo.expiredAt != expiredAt) {
                 revert LCPClientEnclaveKeyUnexpectedExpiredAt();
             }
-            // NOTE: if the key already exists, don't update any state
             return heights;
         }
         ekInfo.expiredAt = expiredAt;
         ekInfo.operator = operator;
 
-        emit ZKDCAPRegisteredEnclaveKey(clientId, output.enclaveKey, expiredAt, operator);
+        emit LCPClientZKDCAPRegisteredEnclaveKey(clientId, output.enclaveKey, expiredAt, operator);
 
-        // Note: client and consensus state are not always updated in registerEnclaveKey
         return heights;
+    }
+
+    // --------------------- Internal methods --------------------- //
+
+    function parseRiscZeroVerifierInfo(bytes memory verifierInfo) internal pure returns (bytes32) {
+        // The verifier information for the zkDCAP
+        //
+        // The format is as follows:
+        // 0: zkVM type
+        // 1-N: arbitrary data for each zkVM type
+        //
+        // The format of the risc0 zkVM is as follows:
+        // | 0 |  1 - 31  |  32 - 64  |
+        // |---|----------|-----------|
+        // | 1 | reserved | image id  |
+        uint256 vlen = verifierInfo.length;
+        if (vlen == 0) {
+            revert LCPClientZKDCAPInvalidVerifierInfoLength();
+        }
+        // Currently, the client only supports RISC Zero zkVM
+        if (uint8(verifierInfo[0]) != ZKVM_TYPE_RISC_ZERO) {
+            revert LCPClientZKDCAPInvalidVerifierInfoZKVMType();
+        }
+        if (vlen < 64) {
+            revert LCPClientZKDCAPInvalidVerifierInfoLength();
+        }
+        // 32..64 bytes: image ID
+        bytes32 imageId;
+        assembly {
+            imageId := mload(add(add(verifierInfo, 32), 32))
+        }
+        return imageId;
+    }
+
+    /// @dev checkAndUpdateTcbEvaluationDataNumber checks if the current or next TCB evaluation data number update is required.
+    /// @param clientId the client identifier
+    /// @param outputTcbEvaluationDataNumber the minimum TCB evaluation data number of the zkDCAP output
+    /// @return currentUpdated true if the current TCB evaluation data number is updated
+    /// @return nextUpdated true if the next TCB evaluation data number is updated
+    function checkAndUpdateTcbEvaluationDataNumber(string calldata clientId, uint32 outputTcbEvaluationDataNumber)
+        internal
+        returns (bool currentUpdated, bool nextUpdated)
+    {
+        ProtoClientState.Data storage clientState = clientStorages[clientId].clientState;
+
+        // check if the current or next TCB evaluation data number update is required
+        if (
+            clientState.next_tcb_evaluation_data_number != 0
+                && block.timestamp >= clientState.next_tcb_evaluation_data_number_update_time
+        ) {
+            clientState.current_tcb_evaluation_data_number = clientState.next_tcb_evaluation_data_number;
+            clientState.next_tcb_evaluation_data_number = 0;
+            clientState.next_tcb_evaluation_data_number_update_time = 0;
+            currentUpdated = true;
+            // NOTE:
+            // - If the current number is updated again in a subsequent process, only one event is emitted
+            // - A new next TCB evaluation data number is not set, so the `next` is false here
+        }
+
+        if (outputTcbEvaluationDataNumber > clientState.current_tcb_evaluation_data_number) {
+            if (clientState.tcb_evaluation_data_number_update_grace_period == 0) {
+                // If the grace period is zero, the client immediately updates the current TCB evaluation data number
+                clientState.current_tcb_evaluation_data_number = outputTcbEvaluationDataNumber;
+                // If the grace period is zero, the `next_tcb_evaluation_data_number` and `next_tcb_evaluation_data_number_update_time` must always be zero
+                // Otherwise, there is an internal error in the client
+                require(
+                    clientState.next_tcb_evaluation_data_number == 0
+                        && clientState.next_tcb_evaluation_data_number_update_time == 0
+                );
+                return (true, false);
+            } else {
+                // If the grace period is not zero, there may be a next TCB evaluation data number update in the client state
+
+                uint64 nextUpdateTime =
+                    uint64(block.timestamp) + clientState.tcb_evaluation_data_number_update_grace_period;
+
+                // If the next TCB evaluation data number is not set, the client sets the next TCB evaluation data number to the output's TCB evaluation data number
+                if (clientState.next_tcb_evaluation_data_number == 0) {
+                    clientState.next_tcb_evaluation_data_number = outputTcbEvaluationDataNumber;
+                    clientState.next_tcb_evaluation_data_number_update_time = nextUpdateTime;
+                    return (currentUpdated, true);
+                }
+
+                // If the next TCB evaluation data number is set, the client updates the next TCB evaluation data number
+
+                if (outputTcbEvaluationDataNumber > clientState.next_tcb_evaluation_data_number) {
+                    // Edge case 1. clientState.current_tcb_evaluation_data_number < clientState.next_tcb_evaluation_data_number < outputTcbEvaluationDataNumber
+                    //
+                    // In this case, the client immediately updates the current TCB evaluation data number with the `clientState.next_tcb_evaluation_data_number`
+                    // and updates the next TCB evaluation data number with the `outputTcbEvaluationDataNumber`
+                    //
+                    // This case can be caused by too long grace period values or multiple TCB Recovery Events with very short intervals.
+                    // Note that in this case the current number is updated ignoring the grace period setting.
+                    // However, the current number is still a non-latest number, so there should be no problem for the operator operating as expected.
+                    clientState.current_tcb_evaluation_data_number = clientState.next_tcb_evaluation_data_number;
+                    clientState.next_tcb_evaluation_data_number = outputTcbEvaluationDataNumber;
+                    clientState.next_tcb_evaluation_data_number_update_time = nextUpdateTime;
+                    return (true, true);
+                } else if (outputTcbEvaluationDataNumber < clientState.next_tcb_evaluation_data_number) {
+                    // Edge case 2. clientState.current_tcb_evaluation_data_number < outputTcbEvaluationDataNumber < clientState.next_tcb_evaluation_data_number
+                    //
+                    // In this case, the client immediately updates the current TCB evaluation data number with the `outputTcbEvaluationDataNumber`
+                    // and does not update the next TCB evaluation data number.
+                    //
+                    // This case can be caused by too long grace period values or multiple TCB Recovery Events with very short intervals.
+                    // Note that in this case the current number is updated ignoring the grace period setting.
+                    // However, the current number is still a non-latest number, so there should be no problem for the operator operating as expected.
+                    clientState.current_tcb_evaluation_data_number = outputTcbEvaluationDataNumber;
+                    return (true, false);
+                } else {
+                    // General case. outputTcbEvaluationDataNumber == clientState.next_tcb_evaluation_data_number
+                    // In this case, the client already has the next TCB evaluation data number, so it does not need to be updated
+                    return (currentUpdated, false);
+                }
+            }
+        } else if (outputTcbEvaluationDataNumber < clientState.current_tcb_evaluation_data_number) {
+            // The client must revert if the output's TCB evaluation data number is less than the current TCB evaluation data number
+            revert LCPClientZKDCAPUnexpectedTcbEvaluationDataNumber(clientState.current_tcb_evaluation_data_number);
+        } else {
+            // nop: case outputTcbEvaluationDataNumber == clientState.current_tcb_evaluation_data_number
+            return (currentUpdated, false);
+        }
     }
 }
