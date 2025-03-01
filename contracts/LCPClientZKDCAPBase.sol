@@ -131,6 +131,10 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
 
     /**
      * @dev zkDCAPRegisterEnclaveKey validates the zkDCAP proof and registers the enclave key from the commit.
+     * @notice The client only supports RISC Zero zkVM currently.
+     * @param clientId the client identifier
+     * @param message the message to register the enclave key with the zkDCAP proof
+     * @return heights the heights at which the new consensus states are stored. It is always empty because the consensus state is never updated in this function.
      */
     function zkDCAPRegisterEnclaveKey(string calldata clientId, ZKDCAPRegisterEnclaveKeyMessage.Data calldata message)
         public
@@ -177,7 +181,7 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
         }
 
         // check if the validity period of the output is valid at the current block timestamp
-        if (block.timestamp < output.validityNotBeforeMax || block.timestamp > output.validityNotAfterMin) {
+        if (block.timestamp < output.validityNotBefore || block.timestamp > output.validityNotAfter) {
             revert LCPClientZKDCAPOutputNotValid();
         }
 
@@ -186,6 +190,20 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
             revert LCPClientZKDCAPUnexpectedEnclaveDebugMode();
         }
 
+        // calculate the expiration time of the enclave key
+        uint64 expiredAt;
+        if (clientState.key_expiration == 0) {
+            // If the value is 0, the validity period of the EK is `qv_output.validity.not_after`.
+            expiredAt = output.validityNotAfter;
+        } else {
+            // If the value is greater than 0, the validity period of the EK is min(`output.validty.not_before + key_expiration`, `output.validity.not_after`).
+            expiredAt = output.validityNotBefore + clientState.key_expiration;
+            if (expiredAt > output.validityNotAfter) {
+                expiredAt = output.validityNotAfter;
+            }
+        }
+
+        // check if the TCB evaluation data number is updated
         (bool currentUpdated, bool nextUpdated) =
             checkAndUpdateTcbEvaluationDataNumber(clientId, output.minTcbEvaluationDataNumber);
         if (currentUpdated) {
@@ -218,7 +236,6 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
             revert LCPClientAVRUnexpectedOperator(operator, output.operator);
         }
 
-        uint64 expiredAt = output.validityNotAfterMin;
         EKInfo storage ekInfo = clientStorage.ekInfos[output.enclaveKey];
         if (ekInfo.expiredAt != 0) {
             if (ekInfo.operator != operator) {
@@ -240,8 +257,6 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
     // --------------------- Internal methods --------------------- //
 
     function parseRiscZeroVerifierInfo(bytes memory verifierInfo) internal pure returns (bytes32) {
-        // The verifier information for the zkDCAP
-        //
         // The format is as follows:
         // 0: zkVM type
         // 1-N: arbitrary data for each zkVM type
@@ -269,18 +284,30 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
         return imageId;
     }
 
-    /// @dev checkAndUpdateTcbEvaluationDataNumber checks if the current or next TCB evaluation data number update is required.
-    /// @param clientId the client identifier
-    /// @param outputTcbEvaluationDataNumber the minimum TCB evaluation data number of the zkDCAP output
-    /// @return currentUpdated true if the current TCB evaluation data number is updated
-    /// @return nextUpdated true if the next TCB evaluation data number is updated
+    /// @dev Checks and updates the current and next TCB evaluation data numbers based on the observed `outputTcbEvaluationDataNumber`.
+    ///
+    /// The update logic aligns strictly with the proto definition in `LCP.proto`:
+    /// - If the reserved next number's update time has arrived, it immediately replaces the current number.
+    /// - Observing a number greater than the current number triggers updates depending on the configured grace period:
+    ///   - Zero grace period: Immediate update; no next number reserved.
+    ///   - Non-zero grace period:
+    ///     - If no next number reserved yet, reserve the observed number.
+    ///     - If a next number is already reserved:
+    ///       - General case: No action required if the observed number matches the reserved number.
+    ///       - Edge case 1 (current < next < observed): Immediate update of current number to reserved number; reserve newly observed number.
+    ///       - Edge case 2 (current < observed < next): Immediate update of current number to observed number; reserved number unchanged.
+    ///
+    /// @param clientId Client identifier
+    /// @param outputTcbEvaluationDataNumber Observed TCB evaluation data number
+    /// @return currentUpdated True if current number is updated
+    /// @return nextUpdated True if next number is updated or reserved
     function checkAndUpdateTcbEvaluationDataNumber(string calldata clientId, uint32 outputTcbEvaluationDataNumber)
         internal
         returns (bool currentUpdated, bool nextUpdated)
     {
         ProtoClientState.Data storage clientState = clientStorages[clientId].clientState;
 
-        // check if the current or next TCB evaluation data number update is required
+        // Check if the reserved next TCB number is due for update.
         if (
             clientState.next_tcb_evaluation_data_number != 0
                 && block.timestamp >= clientState.next_tcb_evaluation_data_number_update_time
@@ -289,72 +316,50 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
             clientState.next_tcb_evaluation_data_number = 0;
             clientState.next_tcb_evaluation_data_number_update_time = 0;
             currentUpdated = true;
-            // NOTE:
-            // - If the current number is updated again in a subsequent process, only one event is emitted
-            // - A new next TCB evaluation data number is not set, so the `next` is false here
+            // No new next number reservation here.
         }
 
         if (outputTcbEvaluationDataNumber > clientState.current_tcb_evaluation_data_number) {
             if (clientState.tcb_evaluation_data_number_update_grace_period == 0) {
-                // If the grace period is zero, the client immediately updates the current TCB evaluation data number
+                // Immediate update due to zero grace period.
                 clientState.current_tcb_evaluation_data_number = outputTcbEvaluationDataNumber;
-                // If the grace period is zero, the `next_tcb_evaluation_data_number` and `next_tcb_evaluation_data_number_update_time` must always be zero
-                // Otherwise, there is an internal error in the client
+                // Sanity check: No next number should be reserved if grace period is zero.
                 require(
                     clientState.next_tcb_evaluation_data_number == 0
                         && clientState.next_tcb_evaluation_data_number_update_time == 0
                 );
                 return (true, false);
             } else {
-                // If the grace period is not zero, there may be a next TCB evaluation data number update in the client state
-
                 uint64 nextUpdateTime =
                     uint64(block.timestamp) + clientState.tcb_evaluation_data_number_update_grace_period;
 
-                // If the next TCB evaluation data number is not set, the client sets the next TCB evaluation data number to the output's TCB evaluation data number
                 if (clientState.next_tcb_evaluation_data_number == 0) {
+                    // No reserved number yet; reserve now.
                     clientState.next_tcb_evaluation_data_number = outputTcbEvaluationDataNumber;
                     clientState.next_tcb_evaluation_data_number_update_time = nextUpdateTime;
                     return (currentUpdated, true);
                 }
 
-                // If the next TCB evaluation data number is set, the client updates the next TCB evaluation data number
-
                 if (outputTcbEvaluationDataNumber > clientState.next_tcb_evaluation_data_number) {
-                    // Edge case 1. clientState.current_tcb_evaluation_data_number < clientState.next_tcb_evaluation_data_number < outputTcbEvaluationDataNumber
-                    //
-                    // In this case, the client immediately updates the current TCB evaluation data number with the `clientState.next_tcb_evaluation_data_number`
-                    // and updates the next TCB evaluation data number with the `outputTcbEvaluationDataNumber`
-                    //
-                    // This case can be caused by too long grace period values or multiple TCB Recovery Events with very short intervals.
-                    // Note that in this case the current number is updated ignoring the grace period setting.
-                    // However, the current number is still a non-latest number, so there should be no problem for the operator operating as expected.
+                    // Edge case 1: Immediate update to previously reserved next number.
                     clientState.current_tcb_evaluation_data_number = clientState.next_tcb_evaluation_data_number;
                     clientState.next_tcb_evaluation_data_number = outputTcbEvaluationDataNumber;
                     clientState.next_tcb_evaluation_data_number_update_time = nextUpdateTime;
                     return (true, true);
                 } else if (outputTcbEvaluationDataNumber < clientState.next_tcb_evaluation_data_number) {
-                    // Edge case 2. clientState.current_tcb_evaluation_data_number < outputTcbEvaluationDataNumber < clientState.next_tcb_evaluation_data_number
-                    //
-                    // In this case, the client immediately updates the current TCB evaluation data number with the `outputTcbEvaluationDataNumber`
-                    // and does not update the next TCB evaluation data number.
-                    //
-                    // This case can be caused by too long grace period values or multiple TCB Recovery Events with very short intervals.
-                    // Note that in this case the current number is updated ignoring the grace period setting.
-                    // However, the current number is still a non-latest number, so there should be no problem for the operator operating as expected.
+                    // Edge case 2: Immediate update to the newly observed number, keep existing reservation.
                     clientState.current_tcb_evaluation_data_number = outputTcbEvaluationDataNumber;
                     return (true, false);
                 } else {
-                    // General case. outputTcbEvaluationDataNumber == clientState.next_tcb_evaluation_data_number
-                    // In this case, the client already has the next TCB evaluation data number, so it does not need to be updated
+                    // General case: The observed number is already reserved; no action required.
                     return (currentUpdated, false);
                 }
             }
         } else if (outputTcbEvaluationDataNumber < clientState.current_tcb_evaluation_data_number) {
-            // The client must revert if the output's TCB evaluation data number is less than the current TCB evaluation data number
+            // Reverting due to invalid backward update.
             revert LCPClientZKDCAPUnexpectedTcbEvaluationDataNumber(clientState.current_tcb_evaluation_data_number);
         } else {
-            // nop: case outputTcbEvaluationDataNumber == clientState.current_tcb_evaluation_data_number
+            // Observed number matches current; no updates necessary.
             return (currentUpdated, false);
         }
     }

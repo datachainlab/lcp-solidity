@@ -63,6 +63,9 @@ abstract contract LCPClientIASBase is LCPClientBase {
     ) public override onlyIBC returns (Height.Data memory height) {
         (ProtoClientState.Data memory clientState,) =
             _initializeClient(clientStorages[clientId], protoClientState, protoConsensusState);
+        if (clientState.key_expiration == 0) {
+            revert LCPClientClientStateInvalidKeyExpiration();
+        }
         return clientState.latest_height;
     }
 

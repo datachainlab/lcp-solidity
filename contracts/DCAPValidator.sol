@@ -50,8 +50,8 @@ library DCAPValidator {
         string tcbStatus;
         uint32 minTcbEvaluationDataNumber;
         bytes32 sgxIntelRootCAHash;
-        uint64 validityNotBeforeMax;
-        uint64 validityNotAfterMin;
+        uint64 validityNotBefore;
+        uint64 validityNotAfter;
         bool enclaveDebugEnabled;
         bytes32 mrenclave;
         address enclaveKey;
@@ -73,8 +73,8 @@ library DCAPValidator {
         output.tcbStatus = tcbStatusToString(uint8(outputBytes[8]));
         output.minTcbEvaluationDataNumber = uint32(bytes4(outputBytes[9:13]));
         output.sgxIntelRootCAHash = bytes32(outputBytes[19:51]);
-        output.validityNotBeforeMax = uint64(bytes8(outputBytes[51:59]));
-        output.validityNotAfterMin = uint64(bytes8(outputBytes[59:67]));
+        output.validityNotBefore = uint64(bytes8(outputBytes[51:59]));
+        output.validityNotAfter = uint64(bytes8(outputBytes[59:67]));
         output.enclaveDebugEnabled = uint8(outputBytes[ATTRIBUTES_OFFSET]) & uint8(2) != 0;
         output.mrenclave = bytes32(outputBytes[MRENCLAVE_OFFSET:MRENCLAVE_END_OFFSET]);
         // The initial byte of the report data is the version of the report data

@@ -87,9 +87,6 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         if (clientState.frozen) {
             revert LCPClientClientStateFrozen();
         }
-        if (clientState.key_expiration == 0) {
-            revert LCPClientClientStateInvalidKeyExpiration();
-        }
         if (clientState.mrenclave.length != 32) {
             revert LCPClientClientStateInvalidMrenclaveLength();
         }
