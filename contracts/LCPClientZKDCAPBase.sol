@@ -236,7 +236,7 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
             );
         }
         if (output.operator != address(0) && output.operator != operator) {
-            revert LCPClientAVRUnexpectedOperator(operator, output.operator);
+            revert LCPClientZKDCAPOutputReportUnexpectedOperator(operator, output.operator);
         }
 
         EKInfo storage ekInfo = clientStorage.ekInfos[output.enclaveKey];
