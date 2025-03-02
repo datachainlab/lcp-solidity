@@ -201,6 +201,9 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
             if (expiredAt > output.validityNotAfter) {
                 expiredAt = output.validityNotAfter;
             }
+            if (expiredAt <= block.timestamp) {
+                revert LCPClientEnclaveKeyExpired();
+            }
         }
 
         // check if the TCB evaluation data number is updated
