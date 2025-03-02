@@ -45,6 +45,9 @@ library DCAPValidator {
 
     /**
      * @notice The output of the quote verification
+     * @dev This struct corresponds to `QuoteVerificationOutput` in the dcap-quote-verifier library.
+     *      Note that some fields from the original output are omitted or parsed in greater detail in Solidity for our use case.
+     *      ref. https://github.com/datachainlab/zkdcap/blob/9616d7976a84e97a128fa02175ec994b95e3c137/crates/quote-verifier/src/verifier.rs#L19
      */
     struct Output {
         string tcbStatus;
@@ -91,20 +94,23 @@ library DCAPValidator {
      * @return The string representation of the TCB status
      */
     function tcbStatusToString(uint8 tcbStatus) internal pure returns (string memory) {
+        // The if-else chain is ordered based on the expected frequency of allowed TCB statuses
+        // (most common statuses first), rather than the order of the enum definition.
+        // This ordering may result in minor gas savings by reducing the average number of comparisons in common cases.
         if (tcbStatus == TCB_STATUS_UP_TO_DATE) {
             return TCB_STATUS_UP_TO_DATE_STRING;
+        } else if (tcbStatus == TCB_STATUS_SW_HARDENING_NEEDED) {
+            return TCB_STATUS_SW_HARDENING_NEEDED_STRING;
+        } else if (tcbStatus == TCB_STATUS_CONFIGURATION_NEEDED) {
+            return TCB_STATUS_CONFIGURATION_NEEDED_STRING;
+        } else if (tcbStatus == TCB_STATUS_CONFIGURATION_AND_SW_HARDENING_NEEDED) {
+            return TCB_STATUS_CONFIGURATION_AND_SW_HARDENING_NEEDED_STRING;
+        } else if (tcbStatus == TCB_STATUS_OUT_OF_DATE_CONFIGURATION_NEEDED) {
+            return TCB_STATUS_OUT_OF_DATE_CONFIGURATION_NEEDED_STRING;
         } else if (tcbStatus == TCB_STATUS_OUT_OF_DATE) {
             return TCB_STATUS_OUT_OF_DATE_STRING;
         } else if (tcbStatus == TCB_STATUS_REVOKED) {
             return TCB_STATUS_REVOKED_STRING;
-        } else if (tcbStatus == TCB_STATUS_CONFIGURATION_NEEDED) {
-            return TCB_STATUS_CONFIGURATION_NEEDED_STRING;
-        } else if (tcbStatus == TCB_STATUS_OUT_OF_DATE_CONFIGURATION_NEEDED) {
-            return TCB_STATUS_OUT_OF_DATE_CONFIGURATION_NEEDED_STRING;
-        } else if (tcbStatus == TCB_STATUS_SW_HARDENING_NEEDED) {
-            return TCB_STATUS_SW_HARDENING_NEEDED_STRING;
-        } else if (tcbStatus == TCB_STATUS_CONFIGURATION_AND_SW_HARDENING_NEEDED) {
-            return TCB_STATUS_CONFIGURATION_AND_SW_HARDENING_NEEDED_STRING;
         } else {
             revert("unexpected TCB status");
         }
