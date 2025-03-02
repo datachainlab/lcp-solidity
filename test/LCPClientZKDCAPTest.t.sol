@@ -691,6 +691,62 @@ contract LCPClientZKDCAPTest is BasicTest {
         lc.initializeClient(clientId, clientStateBytes, consensusStateBytes);
     }
 
+    function testInitializeClientInvalidValues() public {
+        string memory clientId = "lcp-zkdcap";
+        TestLCPClientZKDCAPExtended lc = new TestLCPClientZKDCAPExtended(
+            address(this), false, ZKDCAPTestHelper.dummyIntelRootCACert(), address(new NopRiscZeroVerifier())
+        );
+        vm.warp(ZKDCAPTestHelper.TEST_TIMESTAMP);
+        bytes memory consensusStateBytes = LCPProtoMarshaler.marshal(defaultConsensusState());
+
+        {
+            // `current_tcb_evaluation_data_number` is not set
+            IbcLightclientsLcpV1ClientState.Data memory clientState = defaultClientState();
+            clientState.current_tcb_evaluation_data_number = 0;
+            bytes memory clientStateBytes = LCPProtoMarshaler.marshal(clientState);
+            vm.expectRevert(ILCPClientErrors.LCPClientZKDCAPCurrentTcbEvaluationDataNumberNotSet.selector);
+            lc.initializeClient(clientId, clientStateBytes, consensusStateBytes);
+        }
+        {
+            // if `next_tcb_evaluation_data_number` is set, `next_tcb_evaluation_data_number_update_time` should be set
+            IbcLightclientsLcpV1ClientState.Data memory clientState = defaultClientState();
+            clientState.next_tcb_evaluation_data_number = 1;
+            clientState.next_tcb_evaluation_data_number_update_time = 0;
+            bytes memory clientStateBytes = LCPProtoMarshaler.marshal(clientState);
+            vm.expectRevert(ILCPClientErrors.LCPClientZKDCAPInvalidNextTcbEvaluationDataNumberInfo.selector);
+            lc.initializeClient(clientId, clientStateBytes, consensusStateBytes);
+        }
+        {
+            // if `next_tcb_evaluation_data_number_update_time` is set, `next_tcb_evaluation_data_number` should be set
+            IbcLightclientsLcpV1ClientState.Data memory clientState = defaultClientState();
+            clientState.next_tcb_evaluation_data_number = 0;
+            clientState.next_tcb_evaluation_data_number_update_time = uint64(block.timestamp) + 1;
+            bytes memory clientStateBytes = LCPProtoMarshaler.marshal(clientState);
+            vm.expectRevert(ILCPClientErrors.LCPClientZKDCAPInvalidNextTcbEvaluationDataNumberInfo.selector);
+            lc.initializeClient(clientId, clientStateBytes, consensusStateBytes);
+        }
+        {
+            // if `next_tcb_evaluation_data_number` is set, the value should not be equal to `current_tcb_evaluation_data_number`
+            IbcLightclientsLcpV1ClientState.Data memory clientState = defaultClientState();
+            clientState.current_tcb_evaluation_data_number = 1;
+            clientState.next_tcb_evaluation_data_number = 1;
+            clientState.next_tcb_evaluation_data_number_update_time = uint64(block.timestamp) + 1;
+            bytes memory clientStateBytes = LCPProtoMarshaler.marshal(clientState);
+            vm.expectRevert(ILCPClientErrors.LCPClientZKDCAPInvalidNextTcbEvaluationDataNumberInfo.selector);
+            lc.initializeClient(clientId, clientStateBytes, consensusStateBytes);
+        }
+        {
+            // if `next_tcb_evaluation_data_number` is set, the value should be greater than `current_tcb_evaluation_data_number`
+            IbcLightclientsLcpV1ClientState.Data memory clientState = defaultClientState();
+            clientState.current_tcb_evaluation_data_number = 2;
+            clientState.next_tcb_evaluation_data_number = 1;
+            clientState.next_tcb_evaluation_data_number_update_time = uint64(block.timestamp) + 1;
+            bytes memory clientStateBytes = LCPProtoMarshaler.marshal(clientState);
+            vm.expectRevert(ILCPClientErrors.LCPClientZKDCAPInvalidNextTcbEvaluationDataNumberInfo.selector);
+            lc.initializeClient(clientId, clientStateBytes, consensusStateBytes);
+        }
+    }
+
     // --- helper functions ---
 
     function registerEnclaveKeyMessage(DCAPValidator.Output memory output)
