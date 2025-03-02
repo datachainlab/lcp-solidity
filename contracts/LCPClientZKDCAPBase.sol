@@ -261,13 +261,16 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
 
     function parseRiscZeroVerifierInfo(bytes memory verifierInfo) internal pure returns (bytes32) {
         // The format is as follows:
-        // 0: zkVM type
-        // 1-N: arbitrary data for each zkVM type
+        // - First byte (0): zkVM type identifier.
+        // - Remaining bytes (1–N): zkVM-specific data.
         //
-        // The format of the risc0 zkVM is as follows:
-        // | 0 |  1 - 31  |  32 - 64  |
-        // |---|----------|-----------|
-        // | 1 | reserved | image id  |
+        // Currently, only RISC Zero zkVM (type=1) is supported, with the following format:
+        //
+        // | Byte(s) | Description                 |
+        // |---------|-----------------------------|
+        // | 0       | zkVM type (fixed as 1)      |
+        // | 1–31    | Reserved (set as zero)      |
+        // | 32–63   | Image ID                    |
         uint256 vlen = verifierInfo.length;
         if (vlen == 0) {
             revert LCPClientZKDCAPInvalidVerifierInfoLength();
