@@ -8,14 +8,13 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {
     IbcLightclientsLcpV1ClientState as ProtoClientState,
     IbcLightclientsLcpV1ConsensusState as ProtoConsensusState,
-    IbcLightclientsLcpV1RegisterEnclaveKeyMessage as RegisterEnclaveKeyMessage,
     IbcLightclientsLcpV1UpdateClientMessage as UpdateClientMessage,
     IbcLightclientsLcpV1UpdateOperatorsMessage as UpdateOperatorsMessage
 } from "./proto/ibc/lightclients/lcp/v1/LCP.sol";
 import {LCPCommitment} from "./LCPCommitment.sol";
 import {LCPOperator} from "./LCPOperator.sol";
 import {LCPProtoMarshaler} from "./LCPProtoMarshaler.sol";
-import {AVRValidator} from "./AVRValidator.sol";
+import {RemoteAttestation} from "./RemoteAttestation.sol";
 import {ILCPClientErrors} from "./ILCPClientErrors.sol";
 
 abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
@@ -35,47 +34,33 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
 
     struct ClientStorage {
         ProtoClientState.Data clientState;
-        AVRValidator.ReportAllowedStatus allowedStatuses;
+        uint256[50] __gap0;
+        RemoteAttestation.ReportAllowedStatus allowedStatuses;
+        uint256[50] __gap1;
         // height => consensus state
         mapping(uint128 => ConsensusState) consensusStates;
         // enclave key => EKInfo
         mapping(address => EKInfo) ekInfos;
+        bytes32 zkDCAPRisc0ImageId;
     }
-
-    // --------------------- Events ---------------------
-
-    event RegisteredEnclaveKey(string clientId, address enclaveKey, uint256 expiredAt, address operator);
 
     // --------------------- Immutable fields ---------------------
 
     /// @dev ibcHandler is the address of the IBC handler contract.
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
     address internal immutable ibcHandler;
-    /// @dev if developmentMode is true, the client allows the remote attestation of IAS in development.
-    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
-    bool internal immutable developmentMode;
 
     // --------------------- Storage fields ---------------------
 
     /// @dev clientId => client storage
     mapping(string => ClientStorage) internal clientStorages;
 
-    /// @dev RootCA's public key parameters
-    AVRValidator.RSAParams internal verifiedRootCAParams;
-    /// @dev keccak256(signingCert) => RSAParams of signing public key
-    mapping(bytes32 => AVRValidator.RSAParams) internal verifiedSigningRSAParams;
-
-    /// @dev Reserved storage space to allow for layout changes in the future
-    uint256[50] private __gap;
-
     // --------------------- Constructor ---------------------
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     /// @param ibcHandler_ the address of the IBC handler contract
-    /// @param developmentMode_ if true, the client allows the enclave debug mode
-    constructor(address ibcHandler_, bool developmentMode_) {
+    constructor(address ibcHandler_) {
         ibcHandler = ibcHandler_;
-        developmentMode = developmentMode_;
     }
 
     // --------------------- Modifiers ---------------------
@@ -85,33 +70,13 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         _;
     }
 
-    // --------------------- Public methods ---------------------
+    // --------------------- Internal methods ---------------------
 
-    /// @dev isDevelopmentMode returns true if the client allows the enclave debug mode.
-    function isDevelopmentMode() public view returns (bool) {
-        return developmentMode;
-    }
-
-    /// @dev initializeRootCACert initializes the root CA's public key parameters.
-    /// All contracts that inherit LCPClientBase should call this in the constructor or initializer.
-    function initializeRootCACert(bytes memory rootCACert) internal {
-        if (verifiedRootCAParams.notAfter != 0) {
-            revert LCPClientRootCACertAlreadyInitialized();
-        }
-        verifiedRootCAParams = AVRValidator.verifyRootCACert(rootCACert);
-    }
-
-    /**
-     * @dev initializeClient initializes a new client with the given state.
-     *      If succeeded, it returns heights at which the consensus state are stored.
-     *      This function is guaranteed by the IBC contract to be called only once for each `clientId`.
-     * @param clientId the client identifier which is unique within the IBC handler
-     */
-    function initializeClient(
-        string calldata clientId,
+    function _initializeClient(
+        ClientStorage storage clientStorage,
         bytes calldata protoClientState,
         bytes calldata protoConsensusState
-    ) public onlyIBC returns (Height.Data memory height) {
+    ) internal returns (ProtoClientState.Data memory, ProtoConsensusState.Data memory) {
         ProtoClientState.Data memory clientState = LCPProtoMarshaler.unmarshalClientState(protoClientState);
         ProtoConsensusState.Data memory consensusState = LCPProtoMarshaler.unmarshalConsensusState(protoConsensusState);
 
@@ -121,9 +86,6 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         }
         if (clientState.frozen) {
             revert LCPClientClientStateFrozen();
-        }
-        if (clientState.key_expiration == 0) {
-            revert LCPClientClientStateInvalidKeyExpiration();
         }
         if (clientState.mrenclave.length != 32) {
             revert LCPClientClientStateInvalidMrenclaveLength();
@@ -164,7 +126,6 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
             }
             prev = addr;
         }
-        ClientStorage storage clientStorage = clientStorages[clientId];
         clientStorage.clientState = clientState;
 
         // set allowed quote status and advisories
@@ -173,23 +134,29 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
             if (bytes(allowedQuoteStatus).length == 0) {
                 revert LCPClientClientStateInvalidAllowedQuoteStatus();
             }
-            clientStorage.allowedStatuses.allowedQuoteStatuses[allowedQuoteStatus] = AVRValidator.FLAG_ALLOWED;
+            clientStorage.allowedStatuses.allowedQuoteStatuses[allowedQuoteStatus] = RemoteAttestation.FLAG_ALLOWED;
         }
         for (uint256 i = 0; i < clientState.allowed_advisory_ids.length; i++) {
             string memory allowedAdvisoryId = clientState.allowed_advisory_ids[i];
             if (bytes(allowedAdvisoryId).length == 0) {
                 revert LCPClientClientStateInvalidAllowedAdvisoryId();
             }
-            clientStorage.allowedStatuses.allowedAdvisories[allowedAdvisoryId] = AVRValidator.FLAG_ALLOWED;
+            clientStorage.allowedStatuses.allowedAdvisories[allowedAdvisoryId] = RemoteAttestation.FLAG_ALLOWED;
         }
-
-        return clientState.latest_height;
+        return (clientState, consensusState);
     }
+
+    // --------------------- Public methods ---------------------
 
     /**
      * @dev getTimestampAtHeight returns the timestamp of the consensus state at the given height.
      */
-    function getTimestampAtHeight(string calldata clientId, Height.Data calldata height) public view returns (uint64) {
+    function getTimestampAtHeight(string calldata clientId, Height.Data calldata height)
+        public
+        view
+        override
+        returns (uint64)
+    {
         ConsensusState storage consensusState = clientStorages[clientId].consensusStates[height.toUint128()];
         if (consensusState.timestamp == 0) {
             revert LCPClientConsensusStateNotFound();
@@ -200,18 +167,18 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
     /**
      * @dev getLatestHeight returns the latest height of the client state corresponding to `clientId`.
      */
-    function getLatestHeight(string calldata clientId) public view returns (Height.Data memory) {
+    function getLatestHeight(string calldata clientId) public view override returns (Height.Data memory) {
         ProtoClientState.Data storage clientState = clientStorages[clientId].clientState;
         if (clientState.latest_height.revision_height == 0) {
             revert LCPClientClientStateNotFound();
         }
         return clientState.latest_height;
     }
+
     /**
      * @dev getStatus returns the status of the client corresponding to `clientId`.
      */
-
-    function getStatus(string calldata clientId) public view returns (ClientStatus) {
+    function getStatus(string calldata clientId) public view override returns (ClientStatus) {
         return clientStorages[clientId].clientState.frozen ? ClientStatus.Frozen : ClientStatus.Active;
     }
 
@@ -221,6 +188,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
     function getLatestInfo(string calldata clientId)
         public
         view
+        override
         returns (Height.Data memory latestHeight, uint64 latestTimestamp, ClientStatus status)
     {
         ClientStorage storage clientStorage = clientStorages[clientId];
@@ -230,24 +198,23 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
     }
 
     /**
-     * @dev routeUpdateClient returns the calldata to the receiving function of the client message.
-     *      Light client contract may encode a client message as other encoding scheme(e.g. ethereum ABI)
-     *      Check ADR-001 for details.
+     * @dev updateClient updates the client state and the consensus state of the client corresponding to `clientId`.
      */
-    function routeUpdateClient(string calldata clientId, bytes calldata protoClientMessage)
+    function updateClient(string calldata clientId, UpdateClientMessage.Data calldata message)
         public
-        pure
-        returns (bytes4, bytes memory)
+        returns (Height.Data[] memory heights)
     {
-        (bytes32 typeUrlHash, bytes memory args) = LCPProtoMarshaler.routeClientMessage(clientId, protoClientMessage);
-        if (typeUrlHash == LCPProtoMarshaler.UPDATE_CLIENT_MESSAGE_TYPE_URL_HASH) {
-            return (this.updateClient.selector, args);
-        } else if (typeUrlHash == LCPProtoMarshaler.REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL_HASH) {
-            return (this.registerEnclaveKey.selector, args);
-        } else if (typeUrlHash == LCPProtoMarshaler.UPDATE_OPERATORS_MESSAGE_TYPE_URL_HASH) {
-            return (this.updateOperators.selector, args);
+        ClientStorage storage clientStorage = clientStorages[clientId];
+        verifySignatures(clientStorage, keccak256(message.proxy_message), message.signatures);
+
+        LCPCommitment.HeaderedProxyMessage memory hm =
+            abi.decode(message.proxy_message, (LCPCommitment.HeaderedProxyMessage));
+        if (hm.header == LCPCommitment.LCP_MESSAGE_HEADER_UPDATE_STATE) {
+            return updateState(clientStorage, abi.decode(hm.message, (LCPCommitment.UpdateStateProxyMessage)));
+        } else if (hm.header == LCPCommitment.LCP_MESSAGE_HEADER_MISBEHAVIOUR) {
+            return submitMisbehaviour(clientStorage, abi.decode(hm.message, (LCPCommitment.MisbehaviourProxyMessage)));
         } else {
-            revert LCPClientUnknownProtoTypeUrl();
+            revert LCPClientUnknownProxyMessageHeader();
         }
     }
 
@@ -304,41 +271,6 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         return true;
     }
 
-    function validateProxyMessage(
-        ClientStorage storage clientStorage,
-        LCPCommitment.VerifyMembershipProxyMessage memory message,
-        Height.Data calldata height,
-        bytes memory prefix,
-        bytes memory path
-    ) internal view {
-        uint128 messageHeight = message.height.toUint128();
-        uint128 heightValue = height.toUint128();
-        ConsensusState storage consensusState = clientStorage.consensusStates[messageHeight];
-        if (consensusState.stateId == bytes32(0)) {
-            revert LCPClientConsensusStateNotFound();
-        }
-        if (heightValue != messageHeight) {
-            revert LCPClientMembershipVerificationInvalidHeight();
-        }
-        if (keccak256(prefix) != keccak256(message.prefix)) {
-            revert LCPClientMembershipVerificationInvalidPrefix();
-        }
-        if (keccak256(path) != keccak256(message.path)) {
-            revert LCPClientMembershipVerificationInvalidPath();
-        }
-        if (consensusState.stateId != message.stateId) {
-            revert LCPClientMembershipVerificationInvalidStateId();
-        }
-    }
-
-    function verifyCommitmentProofs(
-        ClientStorage storage clientStorage,
-        LCPCommitment.CommitmentProofs memory commitmentProofs
-    ) internal view {
-        bytes32 commitment = keccak256(commitmentProofs.message);
-        verifySignatures(clientStorage, commitment, commitmentProofs.signatures);
-    }
-
     /**
      * @dev getClientState returns the clientState corresponding to `clientId`.
      *      If it's not found, the function returns false.
@@ -367,56 +299,7 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         return (LCPProtoMarshaler.marshalConsensusState(consensusState.stateId, consensusState.timestamp), true);
     }
 
-    function verifySignatures(ClientStorage storage clientStorage, bytes32 commitment, bytes[] memory signatures)
-        internal
-        view
-    {
-        uint256 sigNum = signatures.length;
-        uint256 opNum = clientStorage.clientState.operators.length;
-        if (opNum == 0) {
-            if (sigNum != 1) {
-                revert LCPClientInvalidSignaturesLength();
-            }
-            ensureActiveKey(clientStorage, verifyECDSASignature(commitment, signatures[0]));
-        } else {
-            if (sigNum != opNum) {
-                revert LCPClientInvalidSignaturesLength();
-            }
-            uint256 success = 0;
-            for (uint256 i = 0; i < sigNum; i++) {
-                bytes memory sig = signatures[i];
-                if (sig.length != 0) {
-                    ensureActiveKey(
-                        clientStorage,
-                        verifyECDSASignature(commitment, sig),
-                        address(bytes20(clientStorage.clientState.operators[i]))
-                    );
-                    unchecked {
-                        success++;
-                    }
-                }
-            }
-            ensureSufficientValidSignatures(clientStorage.clientState, success);
-        }
-    }
-
-    function updateClient(string calldata clientId, UpdateClientMessage.Data calldata message)
-        public
-        returns (Height.Data[] memory heights)
-    {
-        ClientStorage storage clientStorage = clientStorages[clientId];
-        verifySignatures(clientStorage, keccak256(message.proxy_message), message.signatures);
-
-        LCPCommitment.HeaderedProxyMessage memory hm =
-            abi.decode(message.proxy_message, (LCPCommitment.HeaderedProxyMessage));
-        if (hm.header == LCPCommitment.LCP_MESSAGE_HEADER_UPDATE_STATE) {
-            return updateState(clientStorage, abi.decode(hm.message, (LCPCommitment.UpdateStateProxyMessage)));
-        } else if (hm.header == LCPCommitment.LCP_MESSAGE_HEADER_MISBEHAVIOUR) {
-            return submitMisbehaviour(clientStorage, abi.decode(hm.message, (LCPCommitment.MisbehaviourProxyMessage)));
-        } else {
-            revert LCPClientUnknownProxyMessageHeader();
-        }
-    }
+    // --------------------- Internal methods ---------------------
 
     function updateState(ClientStorage storage clientStorage, LCPCommitment.UpdateStateProxyMessage memory pmsg)
         internal
@@ -492,59 +375,6 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
         LCPCommitment.validationContextEval(pmsg.context, block.timestamp * 1e9);
 
         clientStorage.clientState.frozen = true;
-        return heights;
-    }
-
-    function registerEnclaveKey(string calldata clientId, RegisterEnclaveKeyMessage.Data calldata message)
-        public
-        returns (Height.Data[] memory heights)
-    {
-        ClientStorage storage clientStorage = clientStorages[clientId];
-        AVRValidator.ReportExtractedElements memory reElems = AVRValidator.verifyReport(
-            developmentMode,
-            verifiedRootCAParams,
-            verifiedSigningRSAParams,
-            clientStorage.allowedStatuses,
-            message.report,
-            message.signing_cert,
-            message.signature
-        );
-
-        if (bytes32(clientStorage.clientState.mrenclave) != reElems.mrenclave) {
-            revert LCPClientClientStateUnexpectedMrenclave();
-        }
-
-        // if `operator_signature` is empty, the operator address is zero
-        address operator;
-        if (message.operator_signature.length != 0) {
-            operator = verifyECDSASignature(
-                keccak256(LCPOperator.computeEIP712RegisterEnclaveKey(message.report)), message.operator_signature
-            );
-        }
-        if (reElems.operator != address(0) && reElems.operator != operator) {
-            revert LCPClientAVRUnexpectedOperator(operator, reElems.operator);
-        }
-        uint64 expiredAt = reElems.attestationTime + clientStorage.clientState.key_expiration;
-        if (expiredAt <= block.timestamp) {
-            revert LCPClientAVRAlreadyExpired();
-        }
-        EKInfo storage ekInfo = clientStorage.ekInfos[reElems.enclaveKey];
-        if (ekInfo.expiredAt != 0) {
-            if (ekInfo.operator != operator) {
-                revert LCPClientEnclaveKeyUnexpectedOperator(ekInfo.operator, operator);
-            }
-            if (ekInfo.expiredAt != expiredAt) {
-                revert LCPClientEnclaveKeyUnexpectedExpiredAt();
-            }
-            // NOTE: if the key already exists, don't update any state
-            return heights;
-        }
-        ekInfo.expiredAt = expiredAt;
-        ekInfo.operator = operator;
-
-        emit RegisteredEnclaveKey(clientId, reElems.enclaveKey, expiredAt, operator);
-
-        // Note: client and consensus state are not always updated in registerEnclaveKey
         return heights;
     }
 
@@ -661,5 +491,73 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
             signature[64] = bytes1(uint8(signature[64]) + 27);
         }
         return ECDSA.recover(commitment, signature);
+    }
+
+    function validateProxyMessage(
+        ClientStorage storage clientStorage,
+        LCPCommitment.VerifyMembershipProxyMessage memory message,
+        Height.Data calldata height,
+        bytes memory prefix,
+        bytes memory path
+    ) internal view {
+        uint128 messageHeight = message.height.toUint128();
+        uint128 heightValue = height.toUint128();
+        ConsensusState storage consensusState = clientStorage.consensusStates[messageHeight];
+        if (consensusState.stateId == bytes32(0)) {
+            revert LCPClientConsensusStateNotFound();
+        }
+        if (heightValue != messageHeight) {
+            revert LCPClientMembershipVerificationInvalidHeight();
+        }
+        if (keccak256(prefix) != keccak256(message.prefix)) {
+            revert LCPClientMembershipVerificationInvalidPrefix();
+        }
+        if (keccak256(path) != keccak256(message.path)) {
+            revert LCPClientMembershipVerificationInvalidPath();
+        }
+        if (consensusState.stateId != message.stateId) {
+            revert LCPClientMembershipVerificationInvalidStateId();
+        }
+    }
+
+    function verifyCommitmentProofs(
+        ClientStorage storage clientStorage,
+        LCPCommitment.CommitmentProofs memory commitmentProofs
+    ) internal view {
+        bytes32 commitment = keccak256(commitmentProofs.message);
+        verifySignatures(clientStorage, commitment, commitmentProofs.signatures);
+    }
+
+    function verifySignatures(ClientStorage storage clientStorage, bytes32 commitment, bytes[] memory signatures)
+        internal
+        view
+    {
+        uint256 sigNum = signatures.length;
+        uint256 opNum = clientStorage.clientState.operators.length;
+        if (opNum == 0) {
+            if (sigNum != 1) {
+                revert LCPClientInvalidSignaturesLength();
+            }
+            ensureActiveKey(clientStorage, verifyECDSASignature(commitment, signatures[0]));
+        } else {
+            if (sigNum != opNum) {
+                revert LCPClientInvalidSignaturesLength();
+            }
+            uint256 success = 0;
+            for (uint256 i = 0; i < sigNum; i++) {
+                bytes memory sig = signatures[i];
+                if (sig.length != 0) {
+                    ensureActiveKey(
+                        clientStorage,
+                        verifyECDSASignature(commitment, sig),
+                        address(bytes20(clientStorage.clientState.operators[i]))
+                    );
+                    unchecked {
+                        success++;
+                    }
+                }
+            }
+            ensureSufficientValidSignatures(clientStorage.clientState, success);
+        }
     }
 }

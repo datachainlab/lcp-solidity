@@ -5,6 +5,7 @@ import {
     IbcLightclientsLcpV1ClientState as ClientState,
     IbcLightclientsLcpV1ConsensusState as ConsensusState,
     IbcLightclientsLcpV1RegisterEnclaveKeyMessage as RegisterEnclaveKeyMessage,
+    IbcLightclientsLcpV1ZKDCAPRegisterEnclaveKeyMessage as ZKDCAPRegisterEnclaveKeyMessage,
     IbcLightclientsLcpV1UpdateClientMessage as UpdateClientMessage,
     IbcLightclientsLcpV1UpdateOperatorsMessage as UpdateOperatorsMessage
 } from "./proto/ibc/lightclients/lcp/v1/LCP.sol";
@@ -13,6 +14,8 @@ import {GoogleProtobufAny as Any} from "@hyperledger-labs/yui-ibc-solidity/contr
 library LCPProtoMarshaler {
     string constant UPDATE_CLIENT_MESSAGE_TYPE_URL = "/ibc.lightclients.lcp.v1.UpdateClientMessage";
     string constant REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL = "/ibc.lightclients.lcp.v1.RegisterEnclaveKeyMessage";
+    string constant ZKDCAP_REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL =
+        "/ibc.lightclients.lcp.v1.ZKDCAPRegisterEnclaveKeyMessage";
     string constant UPDATE_OPERATORS_MESSAGE_TYPE_URL = "/ibc.lightclients.lcp.v1.UpdateOperatorsMessage";
     string constant CLIENT_STATE_TYPE_URL = "/ibc.lightclients.lcp.v1.ClientState";
     string constant CONSENSUS_STATE_TYPE_URL = "/ibc.lightclients.lcp.v1.ConsensusState";
@@ -20,6 +23,8 @@ library LCPProtoMarshaler {
     bytes32 constant UPDATE_CLIENT_MESSAGE_TYPE_URL_HASH = keccak256(abi.encodePacked(UPDATE_CLIENT_MESSAGE_TYPE_URL));
     bytes32 constant REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL_HASH =
         keccak256(abi.encodePacked(REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL));
+    bytes32 constant ZKDCAP_REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL_HASH =
+        keccak256(abi.encodePacked(ZKDCAP_REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL));
     bytes32 constant UPDATE_OPERATORS_MESSAGE_TYPE_URL_HASH =
         keccak256(abi.encodePacked(UPDATE_OPERATORS_MESSAGE_TYPE_URL));
     bytes32 constant CLIENT_STATE_TYPE_URL_HASH = keccak256(abi.encodePacked(CLIENT_STATE_TYPE_URL));
@@ -44,6 +49,13 @@ library LCPProtoMarshaler {
         Any.Data memory any;
         any.type_url = REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL;
         any.value = RegisterEnclaveKeyMessage.encode(message);
+        return Any.encode(any);
+    }
+
+    function marshal(ZKDCAPRegisterEnclaveKeyMessage.Data calldata message) public pure returns (bytes memory) {
+        Any.Data memory any;
+        any.type_url = ZKDCAP_REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL;
+        any.value = ZKDCAPRegisterEnclaveKeyMessage.encode(message);
         return Any.encode(any);
     }
 
@@ -73,6 +85,10 @@ library LCPProtoMarshaler {
             return (typeUrlHash, abi.encode(clientId, message));
         } else if (typeUrlHash == REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL_HASH) {
             RegisterEnclaveKeyMessage.Data memory message = RegisterEnclaveKeyMessage.decode(anyClientMessage.value);
+            return (typeUrlHash, abi.encode(clientId, message));
+        } else if (typeUrlHash == ZKDCAP_REGISTER_ENCLAVE_KEY_MESSAGE_TYPE_URL_HASH) {
+            ZKDCAPRegisterEnclaveKeyMessage.Data memory message =
+                ZKDCAPRegisterEnclaveKeyMessage.decode(anyClientMessage.value);
             return (typeUrlHash, abi.encode(clientId, message));
         } else if (typeUrlHash == UPDATE_OPERATORS_MESSAGE_TYPE_URL_HASH) {
             UpdateOperatorsMessage.Data memory message = UpdateOperatorsMessage.decode(anyClientMessage.value);
