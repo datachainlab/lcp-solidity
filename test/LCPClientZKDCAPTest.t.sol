@@ -670,6 +670,7 @@ contract LCPClientZKDCAPTest is BasicTest {
         vm.warp(ZKDCAPTestHelper.TEST_TIMESTAMP);
         bytes memory consensusStateBytes = LCPProtoMarshaler.marshal(defaultConsensusState());
         IbcLightclientsLcpV1ClientState.Data memory clientState = defaultClientState();
+        bytes memory valid_zkdcap_verifier_info = clientState.zkdcap_verifier_infos[0];
         clientState.zkdcap_verifier_infos[0] = new bytes(0);
         bytes memory clientStateBytes = LCPProtoMarshaler.marshal(clientState);
         vm.expectRevert();
@@ -686,6 +687,12 @@ contract LCPClientZKDCAPTest is BasicTest {
         lc.initializeClient(clientId, clientStateBytes, consensusStateBytes);
 
         clientState.zkdcap_verifier_infos = new bytes[](2);
+        clientStateBytes = LCPProtoMarshaler.marshal(clientState);
+        vm.expectRevert();
+        lc.initializeClient(clientId, clientStateBytes, consensusStateBytes);
+
+        clientState.zkdcap_verifier_infos = new bytes[](1);
+        clientState.zkdcap_verifier_infos[0] = abi.encodePacked(valid_zkdcap_verifier_info, bytes1(0x0));
         clientStateBytes = LCPProtoMarshaler.marshal(clientState);
         vm.expectRevert();
         lc.initializeClient(clientId, clientStateBytes, consensusStateBytes);

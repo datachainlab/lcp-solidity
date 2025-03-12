@@ -279,7 +279,8 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
         if (uint8(verifierInfo[0]) != ZKVM_TYPE_RISC_ZERO) {
             revert LCPClientZKDCAPInvalidVerifierInfoZKVMType();
         }
-        if (vlen < 64) {
+        // risc0 verifier info should be 64 bytes
+        if (vlen != 64) {
             revert LCPClientZKDCAPInvalidVerifierInfoLength();
         }
         // 32..64 bytes: image ID
