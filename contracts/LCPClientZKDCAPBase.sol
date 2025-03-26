@@ -191,15 +191,16 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
         }
 
         // calculate the expiration time of the enclave key
+        uint64 maxExpiredAt = output.validityNotAfter + 1;
         uint64 expiredAt;
         if (clientState.key_expiration == 0) {
-            // If the value is 0, the validity period of the EK is `qv_output.validity.not_after`.
-            expiredAt = output.validityNotAfter;
+            // If the value is 0, the validity period of the EK is `output.validity.not_after` + 1.
+            expiredAt = maxExpiredAt;
         } else {
-            // If the value is greater than 0, the validity period of the EK is min(`output.validty.not_before + key_expiration`, `output.validity.not_after`).
+            // If the value is greater than 0, the validity period of the EK is min(`output.validity.not_before + key_expiration`, `output.validity.not_after` + 1).
             expiredAt = output.validityNotBefore + clientState.key_expiration;
-            if (expiredAt > output.validityNotAfter) {
-                expiredAt = output.validityNotAfter;
+            if (expiredAt > maxExpiredAt) {
+                expiredAt = maxExpiredAt;
             }
             if (expiredAt <= block.timestamp) {
                 revert LCPClientEnclaveKeyExpired();
