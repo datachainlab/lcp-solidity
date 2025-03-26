@@ -51,7 +51,7 @@ contract LCPClientZKDCAPTest is BasicTest {
         // warp to the time of `output.validityNotBefore`
         vm.warp(output.validityNotBefore);
         lc.zkDCAPRegisterEnclaveKey(clientId, registerEnclaveKeyMessage(output));
-        assertEq(lc.getEKInfo(clientId, output.enclaveKey).expiredAt, output.validityNotAfter);
+        assertEq(lc.getEKInfo(clientId, output.enclaveKey).expiredAt, output.validityNotAfter + 1);
 
         // if `validityNotBefore` is in the future, it should fail
         output = ZKDCAPTestHelper.qvOutput();
@@ -72,7 +72,7 @@ contract LCPClientZKDCAPTest is BasicTest {
         output.validityNotAfter = uint64(block.timestamp);
         output.enclaveKey = address(2);
         lc.zkDCAPRegisterEnclaveKey(clientId, registerEnclaveKeyMessage(output));
-        assertEq(lc.getEKInfo(clientId, output.enclaveKey).expiredAt, output.validityNotAfter);
+        assertEq(lc.getEKInfo(clientId, output.enclaveKey).expiredAt, output.validityNotAfter + 1);
     }
 
     function testRegisterEnclaveKeyNotSetGracePeriod() public {
@@ -300,11 +300,11 @@ contract LCPClientZKDCAPTest is BasicTest {
         DCAPValidator.Output memory output;
 
         // if `key_expiration` is 0 and the current time is within the validity period, it should succeed
-        // and the key expiration should be set to `validityNotAfter`
+        // and the key expiration should be set to `validityNotAfter` + 1
         output = ZKDCAPTestHelper.qvOutput();
         vm.warp(output.validityNotBefore);
         lc.zkDCAPRegisterEnclaveKey(clientId, registerEnclaveKeyMessage(output));
-        assertEq(lc.getEKInfo(clientId, output.enclaveKey).expiredAt, output.validityNotAfter);
+        assertEq(lc.getEKInfo(clientId, output.enclaveKey).expiredAt, output.validityNotAfter + 1);
     }
 
     function testRegisterEnclaveKeySetKeyExpiration() public {
@@ -356,7 +356,7 @@ contract LCPClientZKDCAPTest is BasicTest {
         output.enclaveKey = address(3);
         output.validityNotAfter = output.validityNotBefore + clientState.key_expiration - 1;
         lc.zkDCAPRegisterEnclaveKey(clientId, registerEnclaveKeyMessage(output));
-        assertEq(lc.getEKInfo(clientId, output.enclaveKey).expiredAt, output.validityNotAfter);
+        assertEq(lc.getEKInfo(clientId, output.enclaveKey).expiredAt, output.validityNotAfter + 1);
     }
 
     function testRegisterEnclaveKeyInvalidZkvmType() public {
