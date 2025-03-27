@@ -55,6 +55,9 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
     /// @dev clientId => client storage
     mapping(string => ClientStorage) internal clientStorages;
 
+    /// @dev Reserved storage space to allow for layout changes in the future
+    uint256[50] private __gap;
+
     // --------------------- Constructor ---------------------
 
     /// @custom:oz-upgrades-unsafe-allow constructor
