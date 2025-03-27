@@ -60,6 +60,9 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
     /// @custom:oz-upgrades-unsafe-allow constructor
     /// @param ibcHandler_ the address of the IBC handler contract
     constructor(address ibcHandler_) {
+        if (ibcHandler_ == address(0)) {
+            revert LCPClientBaseInvalidConstructorParams();
+        }
         ibcHandler = ibcHandler_;
     }
 
