@@ -10,7 +10,9 @@ contract LCPClientZKDCAPOwnableUpgradeable is LCPClientZKDCAPBase, UUPSUpgradeab
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(address ibcHandler_, bool developmentMode_, bytes memory intelRootCA, address riscZeroVerifier_)
         LCPClientZKDCAPBase(ibcHandler_, developmentMode_, intelRootCA, riscZeroVerifier_)
-    {}
+    {
+        _disableInitializers();
+    }
 
     function initialize() public initializer {
         __UUPSUpgradeable_init();
