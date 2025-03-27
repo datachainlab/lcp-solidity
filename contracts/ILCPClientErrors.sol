@@ -59,6 +59,8 @@ interface ILCPClientErrors {
     error LCPClientUpdateOperatorsPermissionless();
     error LCPClientUpdateOperatorsSignatureUnexpectedOperator(address actual, address expected);
 
+    error LCPClientBaseInvalidConstructorParams();
+
     error LCPClientZKDCAPInvalidConstructorParams();
     error LCPClientZKDCAPOutputNotValid();
     error LCPClientZKDCAPUnrecognizedTCBStatus();
@@ -66,7 +68,7 @@ interface ILCPClientErrors {
     error LCPClientZKDCAPInvalidNextTcbEvaluationDataNumberInfo();
     error LCPClientZKDCAPInvalidVerifierInfos();
     error LCPClientZKDCAPInvalidVerifierInfoLength();
-    error LCPClientZKDCAPInvalidVerifierInfoZKVMType();
+    error LCPClientZKDCAPInvalidVerifierInfoRisc0Header();
     error LCPClientZKDCAPUnsupportedZKVMType();
     error LCPClientZKDCAPRisc0ImageIdNotSet();
     error LCPClientZKDCAPUnexpectedIntelRootCAHash();

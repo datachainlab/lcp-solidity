@@ -55,11 +55,17 @@ abstract contract LCPClientBase is ILightClient, ILCPClientErrors {
     /// @dev clientId => client storage
     mapping(string => ClientStorage) internal clientStorages;
 
+    /// @dev Reserved storage space to allow for layout changes in the future
+    uint256[50] private __gap;
+
     // --------------------- Constructor ---------------------
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     /// @param ibcHandler_ the address of the IBC handler contract
     constructor(address ibcHandler_) {
+        if (ibcHandler_ == address(0)) {
+            revert LCPClientBaseInvalidConstructorParams();
+        }
         ibcHandler = ibcHandler_;
     }
 
