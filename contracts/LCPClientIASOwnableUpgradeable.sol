@@ -8,7 +8,9 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 /// @custom:oz-upgrades-unsafe-allow external-library-linking
 contract LCPClientIASOwnableUpgradeable is LCPClientIASBase, UUPSUpgradeable, OwnableUpgradeable {
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor(address ibcHandler, bool developmentMode) LCPClientIASBase(ibcHandler, developmentMode) {}
+    constructor(address ibcHandler, bool developmentMode) LCPClientIASBase(ibcHandler, developmentMode) {
+        _disableInitializers();
+    }
 
     function initialize(bytes memory rootCACert) public initializer {
         initializeRootCACert(rootCACert);
