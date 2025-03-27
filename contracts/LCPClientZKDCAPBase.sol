@@ -264,6 +264,7 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
         // The format is as follows:
         // - First byte (0): zkVM type identifier.
         // - Remaining bytes (1–N): zkVM-specific data.
+        // - N must be greater than or equal to 32.
         //
         // Currently, only RISC Zero zkVM (type=1) is supported, with the following format:
         //
@@ -273,12 +274,19 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
         // | 1–31    | Reserved (set as zero)      |
         // | 32–63   | Image ID                    |
         uint256 vlen = verifierInfo.length;
-        if (vlen == 0) {
+        if (vlen < 32) {
             revert LCPClientZKDCAPInvalidVerifierInfoLength();
         }
-        // Currently, the client only supports RISC Zero zkVM
-        if (uint8(verifierInfo[0]) != ZKVM_TYPE_RISC_ZERO) {
-            revert LCPClientZKDCAPInvalidVerifierInfoZKVMType();
+        // Currently, the client only supports RISC Zero zkVM.
+        // Load the first 32 bytes of 'verifierInfo' into 'header'.
+        // According to the format, the first byte should be 0x01 (RISC Zero type),
+        // and the remaining 31 bytes must be zero (reserved field).
+        bytes32 header;
+        assembly {
+            header := mload(add(verifierInfo, 32))
+        }
+        if (header != bytes32(bytes1(ZKVM_TYPE_RISC_ZERO))) {
+            revert LCPClientZKDCAPInvalidVerifierInfoRisc0Header();
         }
         // risc0 verifier info should be 64 bytes
         if (vlen != 64) {

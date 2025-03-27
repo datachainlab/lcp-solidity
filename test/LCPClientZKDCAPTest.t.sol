@@ -376,6 +376,43 @@ contract LCPClientZKDCAPTest is BasicTest {
         lc.zkDCAPRegisterEnclaveKey(clientId, msgData);
     }
 
+    function testRegisterEnclaveKeyInvalidRisc0Header() public {
+        string memory clientId = "lcp-zkdcap";
+        TestLCPClientZKDCAPExtended lc = new TestLCPClientZKDCAPExtended(
+            address(this), false, ZKDCAPTestHelper.dummyIntelRootCACert(), address(new NopRiscZeroVerifier())
+        );
+        {
+            IbcLightclientsLcpV1ClientState.Data memory clientState = defaultClientState();
+            clientState.zkdcap_verifier_infos[0][0] = 0x00;
+            bytes memory clientStateBytes = LCPProtoMarshaler.marshal(clientState);
+            bytes memory consensusStateBytes = LCPProtoMarshaler.marshal(defaultConsensusState());
+            vm.expectRevert(
+                abi.encodeWithSelector(ILCPClientErrors.LCPClientZKDCAPInvalidVerifierInfoRisc0Header.selector)
+            );
+            lc.initializeClient(clientId, clientStateBytes, consensusStateBytes);
+        }
+        {
+            IbcLightclientsLcpV1ClientState.Data memory clientState = defaultClientState();
+            clientState.zkdcap_verifier_infos[0][0] = 0x02;
+            bytes memory clientStateBytes = LCPProtoMarshaler.marshal(clientState);
+            bytes memory consensusStateBytes = LCPProtoMarshaler.marshal(defaultConsensusState());
+            vm.expectRevert(
+                abi.encodeWithSelector(ILCPClientErrors.LCPClientZKDCAPInvalidVerifierInfoRisc0Header.selector)
+            );
+            lc.initializeClient(clientId, clientStateBytes, consensusStateBytes);
+        }
+        {
+            IbcLightclientsLcpV1ClientState.Data memory clientState = defaultClientState();
+            clientState.zkdcap_verifier_infos[0][1] = 0x01;
+            bytes memory clientStateBytes = LCPProtoMarshaler.marshal(clientState);
+            bytes memory consensusStateBytes = LCPProtoMarshaler.marshal(defaultConsensusState());
+            vm.expectRevert(
+                abi.encodeWithSelector(ILCPClientErrors.LCPClientZKDCAPInvalidVerifierInfoRisc0Header.selector)
+            );
+            lc.initializeClient(clientId, clientStateBytes, consensusStateBytes);
+        }
+    }
+
     function testRegisterEnclaveKeyEnclaveDebugMismatch() public {
         string memory clientId = "lcp-zkdcap";
         // developmentMode=false but output.enclaveDebugEnabled is set to true

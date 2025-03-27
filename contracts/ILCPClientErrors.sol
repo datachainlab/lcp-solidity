@@ -68,7 +68,7 @@ interface ILCPClientErrors {
     error LCPClientZKDCAPInvalidNextTcbEvaluationDataNumberInfo();
     error LCPClientZKDCAPInvalidVerifierInfos();
     error LCPClientZKDCAPInvalidVerifierInfoLength();
-    error LCPClientZKDCAPInvalidVerifierInfoZKVMType();
+    error LCPClientZKDCAPInvalidVerifierInfoRisc0Header();
     error LCPClientZKDCAPUnsupportedZKVMType();
     error LCPClientZKDCAPRisc0ImageIdNotSet();
     error LCPClientZKDCAPUnexpectedIntelRootCAHash();
