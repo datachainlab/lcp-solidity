@@ -38,7 +38,6 @@ contract TokiLCPClientZKDCAP is LCPClientZKDCAPOwnableUpgradeable {
         address riscZeroVerifier,
         uint64 recoveredVersion
     ) LCPClientZKDCAPOwnableUpgradeable(ibcHandler, developmentMode, intelRootCA, riscZeroVerifier) {
-        _disableInitializers();
         RECOVERED_VERSION = recoveredVersion;
     }
 
