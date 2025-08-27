@@ -575,18 +575,13 @@ contract LCPClientZKDCAPTest is BasicTest {
             DCAPValidator.Output memory output = ZKDCAPTestHelper.qvOutput();
             output.operator = op1.addr;
             IbcLightclientsLcpV1ZKDCAPRegisterEnclaveKeyMessage.Data memory message = registerEnclaveKeyMessage(output);
-            vm.expectRevert(
-                abi.encodeWithSelector(
-                    ILCPClientErrors.LCPClientZKDCAPOutputReportUnexpectedOperator.selector, address(0), output.operator
-                )
-            );
+            vm.expectRevert(abi.encodeWithSelector(ILCPClientErrors.LCPClientZKDCAPInvalidOperator.selector));
             lc.zkDCAPRegisterEnclaveKey(clientId, message);
         }
 
         {
-            // if the operator signature is set by a different operator, it should fail
+            // if the operator signature is set by an unregistered operator, it should fail
             DCAPValidator.Output memory output = ZKDCAPTestHelper.qvOutput();
-            output.operator = op1.addr;
             IbcLightclientsLcpV1ZKDCAPRegisterEnclaveKeyMessage.Data memory message = registerEnclaveKeyMessage(output);
             (uint8 v, bytes32 r, bytes32 s) = vm.sign(
                 op2,
@@ -597,9 +592,45 @@ contract LCPClientZKDCAPTest is BasicTest {
                 )
             );
             message.operator_signature = abi.encodePacked(r, s, v);
+            vm.expectRevert(abi.encodeWithSelector(ILCPClientErrors.LCPClientZKDCAPInvalidOperator.selector));
+            lc.zkDCAPRegisterEnclaveKey(clientId, message);
+        }
+
+        {
+            // if the operator signature and operator are set by an unregistered operator, it should fail
+            DCAPValidator.Output memory output = ZKDCAPTestHelper.qvOutput();
+            output.operator = op2.addr;
+            IbcLightclientsLcpV1ZKDCAPRegisterEnclaveKeyMessage.Data memory message = registerEnclaveKeyMessage(output);
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+                op2,
+                keccak256(
+                    LCPOperator.computeEIP712ZKDCAPRegisterEnclaveKey(
+                        clientState.zkdcap_verifier_infos[0], keccak256(ZKDCAPTestHelper.toBytes(output))
+                    )
+                )
+            );
+            message.operator_signature = abi.encodePacked(r, s, v);
+            vm.expectRevert(abi.encodeWithSelector(ILCPClientErrors.LCPClientZKDCAPInvalidOperator.selector));
+            lc.zkDCAPRegisterEnclaveKey(clientId, message);
+        }
+
+        {
+            // if the operator signature is set by a different operator, it should fail
+            DCAPValidator.Output memory output = ZKDCAPTestHelper.qvOutput();
+            output.operator = op1.addr;
+            IbcLightclientsLcpV1ZKDCAPRegisterEnclaveKeyMessage.Data memory message = registerEnclaveKeyMessage(output);
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+                op3,
+                keccak256(
+                    LCPOperator.computeEIP712ZKDCAPRegisterEnclaveKey(
+                        clientState.zkdcap_verifier_infos[0], keccak256(ZKDCAPTestHelper.toBytes(output))
+                    )
+                )
+            );
+            message.operator_signature = abi.encodePacked(r, s, v);
             vm.expectRevert(
                 abi.encodeWithSelector(
-                    ILCPClientErrors.LCPClientZKDCAPOutputReportUnexpectedOperator.selector, op2.addr, op1.addr
+                    ILCPClientErrors.LCPClientZKDCAPOutputReportUnexpectedOperator.selector, op3.addr, op1.addr
                 )
             );
             lc.zkDCAPRegisterEnclaveKey(clientId, message);
@@ -625,12 +656,12 @@ contract LCPClientZKDCAPTest is BasicTest {
         }
 
         {
-            // if both operator and operator signature are not set, it should succeed
+            // if both operator and operator signature are not set, it should fail
             DCAPValidator.Output memory output = ZKDCAPTestHelper.qvOutput();
             output.enclaveKey = address(2);
             IbcLightclientsLcpV1ZKDCAPRegisterEnclaveKeyMessage.Data memory message = registerEnclaveKeyMessage(output);
+            vm.expectRevert(abi.encodeWithSelector(ILCPClientErrors.LCPClientZKDCAPInvalidOperator.selector));
             lc.zkDCAPRegisterEnclaveKey(clientId, message);
-            assertEq(lc.getEKInfo(clientId, output.enclaveKey).operator, address(0));
         }
 
         {

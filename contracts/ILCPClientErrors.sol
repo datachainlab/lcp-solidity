@@ -73,6 +73,7 @@ interface ILCPClientErrors {
     error LCPClientZKDCAPRisc0ImageIdNotSet();
     error LCPClientZKDCAPUnexpectedIntelRootCAHash();
     error LCPClientZKDCAPOutputReportUnexpectedOperator(address actual, address expected);
+    error LCPClientZKDCAPInvalidOperator();
 
     error LCPClientZKDCAPDisallowedTCBStatus();
     error LCPClientZKDCAPDisallowedAdvisoryID();
