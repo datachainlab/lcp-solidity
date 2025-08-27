@@ -66,28 +66,13 @@ contract TokiLCPClientZKDCAP is LCPClientZKDCAPOwnableUpgradeable {
             revert LCPClientClientStateFrozen();
         }
 
-        Height.Data memory latestHeight =
-            Height.Data(clientState.latest_height.revision_number, clientState.latest_height.revision_height);
-        if (IBCHeight.isZero(latestHeight) || IBCHeight.gte(latestHeight, newConsensusState.height)) {
-            revert LCPClientClientStateInvalidLatestHeight();
-        }
+        // ------- Upgrade ClientState ------- //
 
         // Validate ClientState
         if (newClientState.mrenclave.length != 32) {
             revert LCPClientClientStateInvalidMrenclaveLength();
         }
 
-        // Validate ConsensusState
-        if (newConsensusState.consensusState.timestamp == 0) {
-            revert LCPClientConsensusStateInvalidTimestamp();
-        }
-
-        // A stateId with zero length or zero value is invalid.
-        if (newConsensusState.consensusState.stateId == bytes32(0)) {
-            revert LCPClientConsensusStateInvalidStateId();
-        }
-
-        // Upgrade ClientState
         clientState.mrenclave = newClientState.mrenclave;
         clientState.key_expiration = newClientState.keyExpiration;
 
@@ -119,15 +104,38 @@ contract TokiLCPClientZKDCAP is LCPClientZKDCAPOwnableUpgradeable {
         clientState.zkdcap_verifier_infos[0] = newClientState.zkdcapVerifierInfos[0];
         clientStorage.zkDCAPRisc0ImageId = parseRiscZeroVerifierInfo(newClientState.zkdcapVerifierInfos[0]);
 
-        // Upgrade ConsensusState and latestHeight of ClientState
-        clientState.latest_height.revision_number = newConsensusState.height.revision_number;
-        clientState.latest_height.revision_height = newConsensusState.height.revision_height;
-        uint128 height = IBCHeight.toUint128(newConsensusState.height);
-        clientStorage.consensusStates[height] = newConsensusState.consensusState;
+        // ------- Upgrade ConsensusState ------- //
 
+        Height.Data memory latestHeight =
+            Height.Data(clientState.latest_height.revision_number, clientState.latest_height.revision_height);
+        Height.Data[] memory heights;
+        // If the new consensus state is zero, do not upgrade the consensus state
+        if (!IBCHeight.isZero(newConsensusState.height)) {
+            // Validate ConsensusState
+            if (newConsensusState.consensusState.timestamp == 0) {
+                revert LCPClientConsensusStateInvalidTimestamp();
+            }
+
+            // A stateId with zero length or zero value is invalid.
+            if (newConsensusState.consensusState.stateId == bytes32(0)) {
+                revert LCPClientConsensusStateInvalidStateId();
+            }
+
+            // NOTE: If the latest height is zero, do not upgrade the consensus state
+            if (IBCHeight.isZero(latestHeight) || IBCHeight.gte(latestHeight, newConsensusState.height)) {
+                revert LCPClientClientStateInvalidLatestHeight();
+            }
+
+            // Upgrade ConsensusState and latestHeight of ClientState
+            clientState.latest_height.revision_number = newConsensusState.height.revision_number;
+            clientState.latest_height.revision_height = newConsensusState.height.revision_height;
+            uint128 height = IBCHeight.toUint128(newConsensusState.height);
+            clientStorage.consensusStates[height] = newConsensusState.consensusState;
+
+            heights = new Height.Data[](1);
+            heights[0] = newConsensusState.height;
+        }
         // Update commitments
-        Height.Data[] memory heights = new Height.Data[](1);
-        heights[0] = newConsensusState.height;
         IIBCClient(ibcHandler).updateClientCommitments(newClientState.clientId, heights);
     }
 

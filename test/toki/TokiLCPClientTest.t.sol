@@ -78,16 +78,139 @@ contract TokiLCPClientTest is BasicTest {
             return;
         }
         string memory clientId = "lcp-zkdcap";
+        LCPClientZKDCAPOwnableUpgradeable lc = contractUpgradeCommon(clientId);
+
+        TokiLCPClientZKDCAP.NewClientState memory newClientState;
+        newClientState.clientId = clientId;
+        newClientState.mrenclave = abi.encodePacked(keccak256("new mrenclave"));
+        newClientState.keyExpiration = 60 * 60;
+        newClientState.allowedQuoteStatuses = new string[](1);
+        newClientState.allowedQuoteStatuses[0] = DCAPValidator.TCB_STATUS_SW_HARDENING_NEEDED_STRING;
+        newClientState.allowedAdvisoryIds = new string[](1);
+        newClientState.allowedAdvisoryIds[0] = "INTEL-SA-0002";
+        newClientState.zkdcapVerifierInfos = new bytes[](1);
+        newClientState.zkdcapVerifierInfos[0] = abi.encodePacked(
+            bytes1(uint8(1)), // zkvmType
+            bytes31(0), // reserved
+            bytes32(keccak256("new verifier"))
+        );
+        {
+            (bytes memory bz,) = lc.getClientState(clientId);
+            IbcLightclientsLcpV1ClientState.Data memory clientState = LCPProtoMarshaler.unmarshalClientState(bz);
+            assertNotEq(newClientState.zkdcapVerifierInfos[0], clientState.zkdcap_verifier_infos[0]);
+            assertNotEq(newClientState.allowedQuoteStatuses.length, clientState.allowed_quote_statuses.length);
+        }
+
+        TokiLCPClientZKDCAP.NewConsensusState memory newConsensusState;
+        newConsensusState.height = Height.Data(0, 2);
+        newConsensusState.consensusState.stateId = keccak256("consensus-state-2");
+        newConsensusState.consensusState.timestamp = 2;
+
+        Options memory opts2;
+        opts2.referenceContract = "LCPClientZKDCAPOwnableUpgradeable.sol";
+        opts2.constructorData = abi.encode(
+            address(this), false, ZKDCAPTestHelper.dummyIntelRootCACert(), address(new NopRiscZeroVerifier()), 2
+        );
+        Upgrades.upgradeProxy(
+            address(lc),
+            "TokiLCPClientZKDCAP.sol",
+            abi.encodeCall(TokiLCPClientZKDCAP.upgrade, (newClientState, newConsensusState)),
+            opts2
+        );
+
+        {
+            (bytes memory bz,) = lc.getClientState(clientId);
+            IbcLightclientsLcpV1ClientState.Data memory clientState = LCPProtoMarshaler.unmarshalClientState(bz);
+            assertEq(clientState.latest_height.revision_number, 0);
+            assertEq(clientState.latest_height.revision_height, 2);
+            assertEq(clientState.mrenclave, newClientState.mrenclave);
+            assertEq(clientState.key_expiration, newClientState.keyExpiration);
+            assertEq(clientState.allowed_quote_statuses.length, 1);
+            assertEq(clientState.allowed_quote_statuses[0], newClientState.allowedQuoteStatuses[0]);
+            assertEq(clientState.allowed_advisory_ids.length, 1);
+            assertEq(clientState.allowed_advisory_ids[0], newClientState.allowedAdvisoryIds[0]);
+            assertEq(clientState.zkdcap_verifier_infos[0], newClientState.zkdcapVerifierInfos[0]);
+
+            (bz,) = lc.getConsensusState(clientId, newConsensusState.height);
+            IbcLightclientsLcpV1ConsensusState.Data memory consensusState =
+                LCPProtoMarshaler.unmarshalConsensusState(bz);
+            assertEq(consensusState.state_id, abi.encodePacked(newConsensusState.consensusState.stateId));
+            assertEq(consensusState.timestamp, newConsensusState.consensusState.timestamp);
+        }
+    }
+
+    function testContractUpgradeWithEmptyConsensusState() public {
+        if (!vm.envOr("TEST_UPGRADEABLE", false)) {
+            return;
+        }
+        string memory clientId = "lcp-zkdcap";
+        LCPClientZKDCAPOwnableUpgradeable lc = contractUpgradeCommon(clientId);
+
+        TokiLCPClientZKDCAP.NewClientState memory newClientState;
+        newClientState.clientId = clientId;
+        newClientState.mrenclave = abi.encodePacked(keccak256("new mrenclave"));
+        newClientState.keyExpiration = 60 * 60;
+        newClientState.allowedQuoteStatuses = new string[](1);
+        newClientState.allowedQuoteStatuses[0] = DCAPValidator.TCB_STATUS_SW_HARDENING_NEEDED_STRING;
+        newClientState.allowedAdvisoryIds = new string[](1);
+        newClientState.allowedAdvisoryIds[0] = "INTEL-SA-0002";
+        newClientState.zkdcapVerifierInfos = new bytes[](1);
+        newClientState.zkdcapVerifierInfos[0] = abi.encodePacked(
+            bytes1(uint8(1)), // zkvmType
+            bytes31(0), // reserved
+            bytes32(keccak256("new verifier"))
+        );
+
+        {
+            (bytes memory bz,) = lc.getClientState(clientId);
+            IbcLightclientsLcpV1ClientState.Data memory clientState = LCPProtoMarshaler.unmarshalClientState(bz);
+            assertNotEq(newClientState.zkdcapVerifierInfos[0], clientState.zkdcap_verifier_infos[0]);
+            assertNotEq(newClientState.allowedQuoteStatuses.length, clientState.allowed_quote_statuses.length);
+        }
+
+        TokiLCPClientZKDCAP.NewConsensusState memory newConsensusState;
+        // NOTE: The new consensus state is empty
+        newConsensusState.height = Height.Data(0, 0);
+
+        Options memory opts2;
+        opts2.referenceContract = "LCPClientZKDCAPOwnableUpgradeable.sol";
+        opts2.constructorData = abi.encode(
+            address(this), false, ZKDCAPTestHelper.dummyIntelRootCACert(), address(new NopRiscZeroVerifier()), 2
+        );
+        Upgrades.upgradeProxy(
+            address(lc),
+            "TokiLCPClientZKDCAP.sol",
+            abi.encodeCall(TokiLCPClientZKDCAP.upgrade, (newClientState, newConsensusState)),
+            opts2
+        );
+
+        {
+            (bytes memory bz,) = lc.getClientState(clientId);
+            IbcLightclientsLcpV1ClientState.Data memory clientState = LCPProtoMarshaler.unmarshalClientState(bz);
+            assertEq(clientState.latest_height.revision_number, 0);
+            assertEq(clientState.latest_height.revision_height, 1);
+            assertEq(clientState.mrenclave, newClientState.mrenclave);
+            assertEq(clientState.key_expiration, newClientState.keyExpiration);
+            assertEq(clientState.allowed_quote_statuses.length, 1);
+            assertEq(clientState.allowed_quote_statuses[0], newClientState.allowedQuoteStatuses[0]);
+            assertEq(clientState.allowed_advisory_ids.length, 1);
+            assertEq(clientState.allowed_advisory_ids[0], newClientState.allowedAdvisoryIds[0]);
+            assertEq(clientState.zkdcap_verifier_infos[0], newClientState.zkdcapVerifierInfos[0]);
+        }
+    }
+
+    function contractUpgradeCommon(string memory clientId) internal returns (LCPClientZKDCAPOwnableUpgradeable) {
         Options memory opts;
         opts.constructorData = abi.encode(
             address(this), false, ZKDCAPTestHelper.dummyIntelRootCACert(), address(new NopRiscZeroVerifier())
         );
-        address proxy = Upgrades.deployUUPSProxy(
-            "LCPClientZKDCAPOwnableUpgradeable.sol",
-            abi.encodePacked(LCPClientZKDCAPOwnableUpgradeable.initialize.selector),
-            opts
+        LCPClientZKDCAPOwnableUpgradeable lc = LCPClientZKDCAPOwnableUpgradeable(
+            Upgrades.deployUUPSProxy(
+                "LCPClientZKDCAPOwnableUpgradeable.sol",
+                abi.encodePacked(LCPClientZKDCAPOwnableUpgradeable.initialize.selector),
+                opts
+            )
         );
-        LCPClientZKDCAPOwnableUpgradeable lc = LCPClientZKDCAPOwnableUpgradeable(proxy);
         IbcLightclientsLcpV1ClientState.Data memory clientState = defaultClientState();
         clientState.allowed_quote_statuses = new string[](2);
         clientState.allowed_quote_statuses[0] = DCAPValidator.TCB_STATUS_CONFIGURATION_NEEDED_STRING;
@@ -128,60 +251,7 @@ contract TokiLCPClientTest is BasicTest {
             message.signatures[0] = abi.encodePacked(r, s, v);
             lc.updateClient(clientId, message);
         }
-
-        TokiLCPClientZKDCAP.NewClientState memory newClientState;
-        newClientState.clientId = clientId;
-        newClientState.mrenclave = abi.encodePacked(keccak256("new mrenclave"));
-        newClientState.keyExpiration = 60 * 60;
-        newClientState.allowedQuoteStatuses = new string[](1);
-        newClientState.allowedQuoteStatuses[0] = DCAPValidator.TCB_STATUS_SW_HARDENING_NEEDED_STRING;
-        newClientState.allowedAdvisoryIds = new string[](1);
-        newClientState.allowedAdvisoryIds[0] = "INTEL-SA-0002";
-        newClientState.zkdcapVerifierInfos = new bytes[](1);
-        newClientState.zkdcapVerifierInfos[0] = abi.encodePacked(
-            bytes1(uint8(1)), // zkvmType
-            bytes31(0), // reserved
-            bytes32(keccak256("new verifier"))
-        );
-        assertNotEq(newClientState.zkdcapVerifierInfos[0], clientState.zkdcap_verifier_infos[0]);
-        assertNotEq(newClientState.allowedQuoteStatuses.length, clientState.allowed_quote_statuses.length);
-
-        TokiLCPClientZKDCAP.NewConsensusState memory newConsensusState;
-        newConsensusState.height = Height.Data(0, 2);
-        newConsensusState.consensusState.stateId = keccak256("consensus-state-2");
-        newConsensusState.consensusState.timestamp = 2;
-
-        Options memory opts2;
-        opts2.referenceContract = "LCPClientZKDCAPOwnableUpgradeable.sol";
-        opts2.constructorData = abi.encode(
-            address(this), false, ZKDCAPTestHelper.dummyIntelRootCACert(), address(new NopRiscZeroVerifier()), 2
-        );
-        Upgrades.upgradeProxy(
-            proxy,
-            "TokiLCPClientZKDCAP.sol",
-            abi.encodeCall(TokiLCPClientZKDCAP.upgrade, (newClientState, newConsensusState)),
-            opts2
-        );
-
-        {
-            (bytes memory bz,) = lc.getClientState(clientId);
-            IbcLightclientsLcpV1ClientState.Data memory clientState = LCPProtoMarshaler.unmarshalClientState(bz);
-            assertEq(clientState.latest_height.revision_number, 0);
-            assertEq(clientState.latest_height.revision_height, 2);
-            assertEq(clientState.mrenclave, newClientState.mrenclave);
-            assertEq(clientState.key_expiration, newClientState.keyExpiration);
-            assertEq(clientState.allowed_quote_statuses.length, 1);
-            assertEq(clientState.allowed_quote_statuses[0], newClientState.allowedQuoteStatuses[0]);
-            assertEq(clientState.allowed_advisory_ids.length, 1);
-            assertEq(clientState.allowed_advisory_ids[0], newClientState.allowedAdvisoryIds[0]);
-            assertEq(clientState.zkdcap_verifier_infos[0], newClientState.zkdcapVerifierInfos[0]);
-
-            (bz,) = lc.getConsensusState(clientId, newConsensusState.height);
-            IbcLightclientsLcpV1ConsensusState.Data memory consensusState =
-                LCPProtoMarshaler.unmarshalConsensusState(bz);
-            assertEq(consensusState.state_id, abi.encodePacked(newConsensusState.consensusState.stateId));
-            assertEq(consensusState.timestamp, newConsensusState.consensusState.timestamp);
-        }
+        return lc;
     }
 
     function testRecoveredLCPClientUpgradeable() public {
