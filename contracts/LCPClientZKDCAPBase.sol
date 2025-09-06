@@ -236,6 +236,15 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
                 message.operator_signature
             );
         }
+
+        // if the operators are set, the operator address must be non-zero and active
+        if (
+            clientStorage.clientState.operators.length != 0
+                && !ensureActiveOperator(clientStorage.clientState, operator)
+        ) {
+            revert LCPClientZKDCAPInvalidOperator();
+        }
+
         if (output.operator != address(0) && output.operator != operator) {
             revert LCPClientZKDCAPOutputReportUnexpectedOperator(operator, output.operator);
         }
@@ -378,5 +387,21 @@ abstract contract LCPClientZKDCAPBase is LCPClientBase {
             // Observed number matches current; no updates necessary.
             return (currentUpdated, false);
         }
+    }
+
+    function ensureActiveOperator(ProtoClientState.Data storage clientState, address operator)
+        internal
+        view
+        returns (bool)
+    {
+        if (operator == address(0)) {
+            return false;
+        }
+        for (uint256 i = 0; i < clientState.operators.length; i++) {
+            if (address(bytes20(clientState.operators[i])) == operator) {
+                return true;
+            }
+        }
+        return false;
     }
 }
