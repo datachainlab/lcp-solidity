@@ -11,6 +11,8 @@ import {IIBCClient} from "@hyperledger-labs/yui-ibc-solidity/contracts/core/02-c
 /// @notice TokiLCPClientZKDCAP is LCPClientZKDCAPOwnableUpgradeable with state recovery functionality for TOKI operations.
 /// @custom:oz-upgrades-unsafe-allow external-library-linking
 contract TokiLCPClientZKDCAP is LCPClientZKDCAPOwnableUpgradeable {
+    // --------------------- Data structures ---------------------
+
     struct NewClientState {
         string clientId;
         bytes mrenclave;
@@ -25,10 +27,14 @@ contract TokiLCPClientZKDCAP is LCPClientZKDCAPOwnableUpgradeable {
         ConsensusState consensusState;
     }
 
+    // --------------------- Immutable fields ---------------------
+
     // A unique version is assigned to the implementation contract.
     // To ensure the initialization process is only allowed once, it is checked by the reinitializer modifier.
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
     uint64 public immutable RECOVERED_VERSION;
+
+    // --------------------- Constructor ---------------------
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(
@@ -41,25 +47,42 @@ contract TokiLCPClientZKDCAP is LCPClientZKDCAPOwnableUpgradeable {
         RECOVERED_VERSION = recoveredVersion;
     }
 
+    // --------------------- Public methods ---------------------
+
     /**
-    * @dev `upgrade` should only be called once through UUPSUpgradeable.upgradeToAndCall.
-    *      This function is used in the following situations:
-    *      - When a critical security vulnerability is discovered in the LCP enclave or zkDCAP quote verifier, requiring an urgent upgrade.
-    *      - When a newly issued security advisory of SGX, which is not critical to LCP security or operations, needs to be permitted.
-    *      - When an ELC corresponding to the client state's `mrenclave` needs to be upgraded due to a hard fork.
-    * @param newClientState New client state to upgrade.
-    * @param newConsensusState New consensus state to upgrade.
-    */
-    function upgrade(NewClientState memory newClientState, NewConsensusState memory newConsensusState)
+     * @dev `upgrade` should only be called once through UUPSUpgradeable.upgradeToAndCall.
+     *      This function is used in the following situations:
+     *      - When a critical security vulnerability is discovered in the LCP enclave or zkDCAP quote verifier, requiring an urgent upgrade.
+     *      - When a newly issued security advisory of SGX, which is not critical to LCP security or operations, needs to be permitted.
+     *      - When an ELC corresponding to the client state's `mrenclave` needs to be upgraded due to a hard fork.
+     * @param newClientStates New client states to upgrade. The order of the client states should be the same as the order of the consensus states.
+     * @param newConsensusStates New consensus states to upgrade. The order of the consensus states should be the same as the order of the client states.
+     *      The consensus state with height zero is ignored.
+     */
+    function upgrade(NewClientState[] memory newClientStates, NewConsensusState[] memory newConsensusStates)
         external
         reinitializer(RECOVERED_VERSION)
         onlyOwner
     {
-        return _upgrade(newClientState, newConsensusState);
+        _upgrade(newClientStates, newConsensusStates);
     }
 
-    function _upgrade(NewClientState memory newClientState, NewConsensusState memory newConsensusState) internal {
+    // --------------------- Internal methods ---------------------
+
+    function _upgrade(NewClientState[] memory newClientStates, NewConsensusState[] memory newConsensusStates)
+        internal
+    {
+        require(newClientStates.length == newConsensusStates.length);
+        for (uint256 i = 0; i < newClientStates.length; i++) {
+            _upgradeState(newClientStates[i], newConsensusStates[i]);
+        }
+    }
+
+    function _upgradeState(NewClientState memory newClientState, NewConsensusState memory newConsensusState) internal {
         ClientStorage storage clientStorage = clientStorages[newClientState.clientId];
+        if (clientStorage.zkDCAPRisc0ImageId == bytes32(0)) {
+            revert LCPClientZKDCAPRisc0ImageIdNotSet();
+        }
         IbcLightclientsLcpV1ClientState.Data storage clientState = clientStorage.clientState;
 
         if (clientState.frozen) {

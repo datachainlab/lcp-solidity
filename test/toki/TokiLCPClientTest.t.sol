@@ -65,8 +65,8 @@ contract TestTokiLCPClientZKDCAP is TokiLCPClientZKDCAP {
         return clientStorages[clientId].ekInfos[ekAddr];
     }
 
-    function upgrade2(NewClientState memory newClientState, NewConsensusState memory newConsensusState) public {
-        _upgrade(newClientState, newConsensusState);
+    function upgrade2(NewClientState[] memory newClientStates, NewConsensusState[] memory newConsensusStates) public {
+        _upgrade(newClientStates, newConsensusStates);
     }
 }
 
@@ -78,7 +78,7 @@ contract TokiLCPClientTest is BasicTest {
             return;
         }
         string memory clientId = "lcp-zkdcap";
-        LCPClientZKDCAPOwnableUpgradeable lc = contractUpgradeCommon(clientId);
+        LCPClientZKDCAPOwnableUpgradeable lc = contractUpgradeCommon(clientId, "ek0");
 
         TokiLCPClientZKDCAP.NewClientState memory newClientState;
         newClientState.clientId = clientId;
@@ -106,6 +106,12 @@ contract TokiLCPClientTest is BasicTest {
         newConsensusState.consensusState.stateId = keccak256("consensus-state-2");
         newConsensusState.consensusState.timestamp = 2;
 
+        TokiLCPClientZKDCAP.NewClientState[] memory newClientStates = new TokiLCPClientZKDCAP.NewClientState[](1);
+        newClientStates[0] = newClientState;
+        TokiLCPClientZKDCAP.NewConsensusState[] memory newConsensusStates =
+            new TokiLCPClientZKDCAP.NewConsensusState[](1);
+        newConsensusStates[0] = newConsensusState;
+
         Options memory opts2;
         opts2.referenceContract = "LCPClientZKDCAPOwnableUpgradeable.sol";
         opts2.constructorData = abi.encode(
@@ -114,7 +120,7 @@ contract TokiLCPClientTest is BasicTest {
         Upgrades.upgradeProxy(
             address(lc),
             "TokiLCPClientZKDCAP.sol",
-            abi.encodeCall(TokiLCPClientZKDCAP.upgrade, (newClientState, newConsensusState)),
+            abi.encodeCall(TokiLCPClientZKDCAP.upgrade, (newClientStates, newConsensusStates)),
             opts2
         );
 
@@ -139,12 +145,328 @@ contract TokiLCPClientTest is BasicTest {
         }
     }
 
+    function testContractUpgradeWithMultipleStates() public {
+        if (!vm.envOr("TEST_UPGRADEABLE", false)) {
+            return;
+        }
+        string memory clientId1 = "lcp-zkdcap-1";
+        string memory clientId2 = "lcp-zkdcap-2";
+
+        // Deploy proxy and initialize first client with default configuration
+        LCPClientZKDCAPOwnableUpgradeable lc = contractUpgradeCommon(clientId1, "ek0");
+
+        // Prepare second client state with different configuration
+        IbcLightclientsLcpV1ClientState.Data memory clientState2 = defaultClientState();
+        clientState2.allowed_quote_statuses = new string[](1);
+        clientState2.allowed_quote_statuses[0] = DCAPValidator.TCB_STATUS_OUT_OF_DATE_STRING;
+        clientState2.allowed_advisory_ids = new string[](1);
+        clientState2.allowed_advisory_ids[0] = "INTEL-SA-0004";
+
+        // Initialize second client using overloaded function (reuse the already deployed proxy)
+        contractUpgradeCommon(clientId2, clientState2, "ek2", lc);
+
+        // Prepare first new client state
+        TokiLCPClientZKDCAP.NewClientState memory newClientState1;
+        newClientState1.clientId = clientId1;
+        newClientState1.mrenclave = abi.encodePacked(keccak256("new mrenclave 1"));
+        newClientState1.keyExpiration = 60 * 60 * 2;
+        newClientState1.allowedQuoteStatuses = new string[](2);
+        newClientState1.allowedQuoteStatuses[0] = DCAPValidator.TCB_STATUS_SW_HARDENING_NEEDED_STRING;
+        newClientState1.allowedQuoteStatuses[1] = DCAPValidator.TCB_STATUS_CONFIGURATION_NEEDED_STRING;
+        newClientState1.allowedAdvisoryIds = new string[](2);
+        newClientState1.allowedAdvisoryIds[0] = "INTEL-SA-0010";
+        newClientState1.allowedAdvisoryIds[1] = "INTEL-SA-0011";
+        newClientState1.zkdcapVerifierInfos = new bytes[](1);
+        newClientState1.zkdcapVerifierInfos[0] = abi.encodePacked(
+            bytes1(uint8(1)), // zkvmType
+            bytes31(0), // reserved
+            bytes32(keccak256("new verifier 1"))
+        );
+
+        // Prepare second new client state
+        TokiLCPClientZKDCAP.NewClientState memory newClientState2;
+        newClientState2.clientId = clientId2;
+        newClientState2.mrenclave = abi.encodePacked(keccak256("new mrenclave 2"));
+        newClientState2.keyExpiration = 60 * 60 * 3;
+        newClientState2.allowedQuoteStatuses = new string[](1);
+        newClientState2.allowedQuoteStatuses[0] = DCAPValidator.TCB_STATUS_UP_TO_DATE_STRING;
+        newClientState2.allowedAdvisoryIds = new string[](3);
+        newClientState2.allowedAdvisoryIds[0] = "INTEL-SA-0020";
+        newClientState2.allowedAdvisoryIds[1] = "INTEL-SA-0021";
+        newClientState2.allowedAdvisoryIds[2] = "INTEL-SA-0022";
+        newClientState2.zkdcapVerifierInfos = new bytes[](1);
+        newClientState2.zkdcapVerifierInfos[0] = abi.encodePacked(
+            bytes1(uint8(1)), // zkvmType - use 1 instead of 2
+            bytes31(0), // reserved
+            bytes32(keccak256("new verifier 2"))
+        );
+
+        // Verify states before upgrade
+        {
+            (bytes memory bz1,) = lc.getClientState(clientId1);
+            IbcLightclientsLcpV1ClientState.Data memory clientState1 = LCPProtoMarshaler.unmarshalClientState(bz1);
+            assertNotEq(newClientState1.zkdcapVerifierInfos[0], clientState1.zkdcap_verifier_infos[0]);
+            assertEq(clientState1.allowed_quote_statuses.length, 2); // Initial state has 2 statuses
+            assertNotEq(newClientState1.allowedQuoteStatuses[0], clientState1.allowed_quote_statuses[0]);
+
+            (bytes memory bz2,) = lc.getClientState(clientId2);
+            IbcLightclientsLcpV1ClientState.Data memory clientState2 = LCPProtoMarshaler.unmarshalClientState(bz2);
+            assertNotEq(newClientState2.zkdcapVerifierInfos[0], clientState2.zkdcap_verifier_infos[0]);
+            assertEq(clientState2.allowed_quote_statuses.length, 1); // clientState2 was initialized with 1 status
+            assertNotEq(newClientState2.allowedQuoteStatuses[0], clientState2.allowed_quote_statuses[0]);
+        }
+
+        // Prepare consensus states (matching the order of client states)
+        TokiLCPClientZKDCAP.NewConsensusState memory newConsensusState1;
+        newConsensusState1.height = Height.Data(0, 2); // Next height after current (1)
+        newConsensusState1.consensusState.stateId = keccak256("consensus-state-client1-2");
+        newConsensusState1.consensusState.timestamp = 2;
+
+        TokiLCPClientZKDCAP.NewConsensusState memory newConsensusState2;
+        newConsensusState2.height = Height.Data(0, 2); // Next height after current (1)
+        newConsensusState2.consensusState.stateId = keccak256("consensus-state-client2-2");
+        newConsensusState2.consensusState.timestamp = 2;
+
+        // Create arrays for upgrade
+        TokiLCPClientZKDCAP.NewClientState[] memory newClientStates = new TokiLCPClientZKDCAP.NewClientState[](2);
+        newClientStates[0] = newClientState1;
+        newClientStates[1] = newClientState2;
+
+        TokiLCPClientZKDCAP.NewConsensusState[] memory newConsensusStates =
+            new TokiLCPClientZKDCAP.NewConsensusState[](2);
+        newConsensusStates[0] = newConsensusState1;
+        newConsensusStates[1] = newConsensusState2;
+
+        // Perform upgrade
+        Options memory opts2;
+        opts2.referenceContract = "LCPClientZKDCAPOwnableUpgradeable.sol";
+        opts2.constructorData = abi.encode(
+            address(this), false, ZKDCAPTestHelper.dummyIntelRootCACert(), address(new NopRiscZeroVerifier()), 2
+        );
+        Upgrades.upgradeProxy(
+            address(lc),
+            "TokiLCPClientZKDCAP.sol",
+            abi.encodeCall(TokiLCPClientZKDCAP.upgrade, (newClientStates, newConsensusStates)),
+            opts2
+        );
+
+        // Verify first client state after upgrade
+        {
+            (bytes memory bz,) = lc.getClientState(clientId1);
+            IbcLightclientsLcpV1ClientState.Data memory clientState = LCPProtoMarshaler.unmarshalClientState(bz);
+            assertEq(clientState.latest_height.revision_number, 0);
+            assertEq(clientState.latest_height.revision_height, 2); // Updated to height 2
+            assertEq(clientState.mrenclave, newClientState1.mrenclave);
+            assertEq(clientState.key_expiration, newClientState1.keyExpiration);
+            assertEq(clientState.allowed_quote_statuses.length, 2);
+            assertEq(clientState.allowed_quote_statuses[0], newClientState1.allowedQuoteStatuses[0]);
+            assertEq(clientState.allowed_quote_statuses[1], newClientState1.allowedQuoteStatuses[1]);
+            assertEq(clientState.allowed_advisory_ids.length, 2);
+            assertEq(clientState.allowed_advisory_ids[0], newClientState1.allowedAdvisoryIds[0]);
+            assertEq(clientState.allowed_advisory_ids[1], newClientState1.allowedAdvisoryIds[1]);
+            assertEq(clientState.zkdcap_verifier_infos[0], newClientState1.zkdcapVerifierInfos[0]);
+
+            (bz,) = lc.getConsensusState(clientId1, newConsensusState1.height);
+            IbcLightclientsLcpV1ConsensusState.Data memory consensusState =
+                LCPProtoMarshaler.unmarshalConsensusState(bz);
+            assertEq(consensusState.state_id, abi.encodePacked(newConsensusState1.consensusState.stateId));
+            assertEq(consensusState.timestamp, newConsensusState1.consensusState.timestamp);
+        }
+
+        // Verify second client state after upgrade
+        {
+            (bytes memory bz,) = lc.getClientState(clientId2);
+            IbcLightclientsLcpV1ClientState.Data memory clientState = LCPProtoMarshaler.unmarshalClientState(bz);
+            assertEq(clientState.latest_height.revision_number, 0);
+            assertEq(clientState.latest_height.revision_height, 2); // Updated to height 2
+            assertEq(clientState.mrenclave, newClientState2.mrenclave);
+            assertEq(clientState.key_expiration, newClientState2.keyExpiration);
+            assertEq(clientState.allowed_quote_statuses.length, 1);
+            assertEq(clientState.allowed_quote_statuses[0], newClientState2.allowedQuoteStatuses[0]);
+            assertEq(clientState.allowed_advisory_ids.length, 3);
+            assertEq(clientState.allowed_advisory_ids[0], newClientState2.allowedAdvisoryIds[0]);
+            assertEq(clientState.allowed_advisory_ids[1], newClientState2.allowedAdvisoryIds[1]);
+            assertEq(clientState.allowed_advisory_ids[2], newClientState2.allowedAdvisoryIds[2]);
+            assertEq(clientState.zkdcap_verifier_infos[0], newClientState2.zkdcapVerifierInfos[0]);
+
+            (bz,) = lc.getConsensusState(clientId2, newConsensusState2.height);
+            IbcLightclientsLcpV1ConsensusState.Data memory consensusState =
+                LCPProtoMarshaler.unmarshalConsensusState(bz);
+            assertEq(consensusState.state_id, abi.encodePacked(newConsensusState2.consensusState.stateId));
+            assertEq(consensusState.timestamp, newConsensusState2.consensusState.timestamp);
+        }
+    }
+
+    function testContractUpgradeWithZeroHeightConsensusState() public {
+        if (!vm.envOr("TEST_UPGRADEABLE", false)) {
+            return;
+        }
+        string memory clientId1 = "lcp-zkdcap-1";
+        string memory clientId2 = "lcp-zkdcap-2";
+
+        // Deploy proxy and initialize first client with default configuration
+        LCPClientZKDCAPOwnableUpgradeable lc = contractUpgradeCommon(clientId1, "ek0");
+
+        {
+            // Prepare second client state with different configuration
+            IbcLightclientsLcpV1ClientState.Data memory clientState2 = defaultClientState();
+            clientState2.allowed_quote_statuses = new string[](1);
+            clientState2.allowed_quote_statuses[0] = DCAPValidator.TCB_STATUS_OUT_OF_DATE_STRING;
+            clientState2.allowed_advisory_ids = new string[](1);
+            clientState2.allowed_advisory_ids[0] = "INTEL-SA-0004";
+
+            // Initialize second client using overloaded function (reuse the already deployed proxy)
+            contractUpgradeCommon(clientId2, clientState2, "ek2", lc);
+        }
+
+        // Prepare first new client state
+        TokiLCPClientZKDCAP.NewClientState memory newClientState1;
+        newClientState1.clientId = clientId1;
+        newClientState1.mrenclave = abi.encodePacked(keccak256("new mrenclave 1"));
+        newClientState1.keyExpiration = 60 * 60 * 2;
+        newClientState1.allowedQuoteStatuses = new string[](2);
+        newClientState1.allowedQuoteStatuses[0] = DCAPValidator.TCB_STATUS_SW_HARDENING_NEEDED_STRING;
+        newClientState1.allowedQuoteStatuses[1] = DCAPValidator.TCB_STATUS_CONFIGURATION_NEEDED_STRING;
+        newClientState1.allowedAdvisoryIds = new string[](2);
+        newClientState1.allowedAdvisoryIds[0] = "INTEL-SA-0010";
+        newClientState1.allowedAdvisoryIds[1] = "INTEL-SA-0011";
+        newClientState1.zkdcapVerifierInfos = new bytes[](1);
+        newClientState1.zkdcapVerifierInfos[0] = abi.encodePacked(
+            bytes1(uint8(1)), // zkvmType
+            bytes31(0), // reserved
+            bytes32(keccak256("new verifier 1"))
+        );
+
+        // Prepare second new client state
+        TokiLCPClientZKDCAP.NewClientState memory newClientState2;
+        newClientState2.clientId = clientId2;
+        newClientState2.mrenclave = abi.encodePacked(keccak256("new mrenclave 2"));
+        newClientState2.keyExpiration = 60 * 60 * 3;
+        newClientState2.allowedQuoteStatuses = new string[](1);
+        newClientState2.allowedQuoteStatuses[0] = DCAPValidator.TCB_STATUS_UP_TO_DATE_STRING;
+        newClientState2.allowedAdvisoryIds = new string[](3);
+        newClientState2.allowedAdvisoryIds[0] = "INTEL-SA-0020";
+        newClientState2.allowedAdvisoryIds[1] = "INTEL-SA-0021";
+        newClientState2.allowedAdvisoryIds[2] = "INTEL-SA-0022";
+        newClientState2.zkdcapVerifierInfos = new bytes[](1);
+        newClientState2.zkdcapVerifierInfos[0] = abi.encodePacked(
+            bytes1(uint8(1)), // zkvmType
+            bytes31(0), // reserved
+            bytes32(keccak256("new verifier 2"))
+        );
+
+        // Verify states before upgrade
+        {
+            (bytes memory bz1,) = lc.getClientState(clientId1);
+            IbcLightclientsLcpV1ClientState.Data memory clientState1 = LCPProtoMarshaler.unmarshalClientState(bz1);
+            assertNotEq(newClientState1.zkdcapVerifierInfos[0], clientState1.zkdcap_verifier_infos[0]);
+            assertEq(clientState1.allowed_quote_statuses.length, 2); // Initial state has 2 statuses
+            assertNotEq(newClientState1.allowedQuoteStatuses[0], clientState1.allowed_quote_statuses[0]);
+
+            (bytes memory bz2,) = lc.getClientState(clientId2);
+            IbcLightclientsLcpV1ClientState.Data memory clientState2Loaded = LCPProtoMarshaler.unmarshalClientState(bz2);
+            assertNotEq(newClientState2.zkdcapVerifierInfos[0], clientState2Loaded.zkdcap_verifier_infos[0]);
+            assertEq(clientState2Loaded.allowed_quote_statuses.length, 1); // clientState2 was initialized with 1 status
+            assertNotEq(newClientState2.allowedQuoteStatuses[0], clientState2Loaded.allowed_quote_statuses[0]);
+        }
+
+        // Prepare consensus states - FIRST ONE WITH HEIGHT ZERO (will be skipped)
+        TokiLCPClientZKDCAP.NewConsensusState memory newConsensusState1;
+        newConsensusState1.height = Height.Data(0, 0); // Zero height - will skip consensus state update
+        newConsensusState1.consensusState.stateId = keccak256("consensus-state-client1-should-not-be-stored");
+        newConsensusState1.consensusState.timestamp = 999; // This should not be stored
+
+        TokiLCPClientZKDCAP.NewConsensusState memory newConsensusState2;
+        newConsensusState2.height = Height.Data(0, 2); // Next height after current (1)
+        newConsensusState2.consensusState.stateId = keccak256("consensus-state-client2-2");
+        newConsensusState2.consensusState.timestamp = 2;
+
+        TokiLCPClientZKDCAP.NewClientState[] memory newClientStates = new TokiLCPClientZKDCAP.NewClientState[](2);
+        newClientStates[0] = newClientState1;
+        newClientStates[1] = newClientState2;
+
+        TokiLCPClientZKDCAP.NewConsensusState[] memory newConsensusStates =
+            new TokiLCPClientZKDCAP.NewConsensusState[](2);
+        newConsensusStates[0] = newConsensusState1;
+        newConsensusStates[1] = newConsensusState2;
+
+        // Perform upgrade
+        {
+            Options memory opts;
+            opts.referenceContract = "LCPClientZKDCAPOwnableUpgradeable.sol";
+            opts.constructorData = abi.encode(
+                address(this), false, ZKDCAPTestHelper.dummyIntelRootCACert(), address(new NopRiscZeroVerifier()), 2
+            );
+            Upgrades.upgradeProxy(
+                address(lc),
+                "TokiLCPClientZKDCAP.sol",
+                abi.encodeCall(TokiLCPClientZKDCAP.upgrade, (newClientStates, newConsensusStates)),
+                opts
+            );
+        }
+
+        // Verify first client state after upgrade
+        {
+            (bytes memory bz,) = lc.getClientState(clientId1);
+            IbcLightclientsLcpV1ClientState.Data memory clientState = LCPProtoMarshaler.unmarshalClientState(bz);
+            // Height should remain 1 since consensus state with height 0 is skipped
+            assertEq(clientState.latest_height.revision_number, 0);
+            assertEq(clientState.latest_height.revision_height, 1); // Remains at height 1
+            assertEq(clientState.mrenclave, newClientState1.mrenclave);
+            assertEq(clientState.key_expiration, newClientState1.keyExpiration);
+            assertEq(clientState.allowed_quote_statuses.length, 2);
+            assertEq(clientState.allowed_quote_statuses[0], newClientState1.allowedQuoteStatuses[0]);
+            assertEq(clientState.allowed_quote_statuses[1], newClientState1.allowedQuoteStatuses[1]);
+            assertEq(clientState.allowed_advisory_ids.length, 2);
+            assertEq(clientState.allowed_advisory_ids[0], newClientState1.allowedAdvisoryIds[0]);
+            assertEq(clientState.allowed_advisory_ids[1], newClientState1.allowedAdvisoryIds[1]);
+            assertEq(clientState.zkdcap_verifier_infos[0], newClientState1.zkdcapVerifierInfos[0]);
+
+            // Verify that consensus state at height 0 was NOT stored
+            (bytes memory bzConsensus, bool found) = lc.getConsensusState(clientId1, Height.Data(0, 0));
+            assertEq(found, false);
+            assertEq(bzConsensus.length, 0);
+
+            // Verify that the previous consensus state at height 1 still exists
+            (bzConsensus, found) = lc.getConsensusState(clientId1, Height.Data(0, 1));
+            assertEq(found, true);
+            IbcLightclientsLcpV1ConsensusState.Data memory consensusState =
+                LCPProtoMarshaler.unmarshalConsensusState(bzConsensus);
+            // Should still have the old consensus state
+            assertEq(consensusState.state_id, abi.encodePacked(keccak256(abi.encodePacked("state-1-", clientId1))));
+            assertEq(consensusState.timestamp, 1);
+        }
+
+        // Verify second client state after upgrade
+        {
+            (bytes memory bz,) = lc.getClientState(clientId2);
+            IbcLightclientsLcpV1ClientState.Data memory clientState = LCPProtoMarshaler.unmarshalClientState(bz);
+            assertEq(clientState.latest_height.revision_number, 0);
+            assertEq(clientState.latest_height.revision_height, 2); // Updated to height 2
+            assertEq(clientState.mrenclave, newClientState2.mrenclave);
+            assertEq(clientState.key_expiration, newClientState2.keyExpiration);
+            assertEq(clientState.allowed_quote_statuses.length, 1);
+            assertEq(clientState.allowed_quote_statuses[0], newClientState2.allowedQuoteStatuses[0]);
+            assertEq(clientState.allowed_advisory_ids.length, 3);
+            assertEq(clientState.allowed_advisory_ids[0], newClientState2.allowedAdvisoryIds[0]);
+            assertEq(clientState.allowed_advisory_ids[1], newClientState2.allowedAdvisoryIds[1]);
+            assertEq(clientState.allowed_advisory_ids[2], newClientState2.allowedAdvisoryIds[2]);
+            assertEq(clientState.zkdcap_verifier_infos[0], newClientState2.zkdcapVerifierInfos[0]);
+
+            (bytes memory bzConsensus,) = lc.getConsensusState(clientId2, newConsensusState2.height);
+            IbcLightclientsLcpV1ConsensusState.Data memory consensusState =
+                LCPProtoMarshaler.unmarshalConsensusState(bzConsensus);
+            assertEq(consensusState.state_id, abi.encodePacked(newConsensusState2.consensusState.stateId));
+            assertEq(consensusState.timestamp, newConsensusState2.consensusState.timestamp);
+        }
+    }
+
     function testContractUpgradeWithEmptyConsensusState() public {
         if (!vm.envOr("TEST_UPGRADEABLE", false)) {
             return;
         }
         string memory clientId = "lcp-zkdcap";
-        LCPClientZKDCAPOwnableUpgradeable lc = contractUpgradeCommon(clientId);
+        LCPClientZKDCAPOwnableUpgradeable lc = contractUpgradeCommon(clientId, "ek0");
 
         TokiLCPClientZKDCAP.NewClientState memory newClientState;
         newClientState.clientId = clientId;
@@ -172,17 +494,25 @@ contract TokiLCPClientTest is BasicTest {
         // NOTE: The new consensus state is empty
         newConsensusState.height = Height.Data(0, 0);
 
-        Options memory opts2;
-        opts2.referenceContract = "LCPClientZKDCAPOwnableUpgradeable.sol";
-        opts2.constructorData = abi.encode(
-            address(this), false, ZKDCAPTestHelper.dummyIntelRootCACert(), address(new NopRiscZeroVerifier()), 2
-        );
-        Upgrades.upgradeProxy(
-            address(lc),
-            "TokiLCPClientZKDCAP.sol",
-            abi.encodeCall(TokiLCPClientZKDCAP.upgrade, (newClientState, newConsensusState)),
-            opts2
-        );
+        TokiLCPClientZKDCAP.NewClientState[] memory newClientStates = new TokiLCPClientZKDCAP.NewClientState[](1);
+        newClientStates[0] = newClientState;
+        TokiLCPClientZKDCAP.NewConsensusState[] memory newConsensusStates =
+            new TokiLCPClientZKDCAP.NewConsensusState[](1);
+        newConsensusStates[0] = newConsensusState;
+
+        {
+            Options memory opts;
+            opts.referenceContract = "LCPClientZKDCAPOwnableUpgradeable.sol";
+            opts.constructorData = abi.encode(
+                address(this), false, ZKDCAPTestHelper.dummyIntelRootCACert(), address(new NopRiscZeroVerifier()), 2
+            );
+            Upgrades.upgradeProxy(
+                address(lc),
+                "TokiLCPClientZKDCAP.sol",
+                abi.encodeCall(TokiLCPClientZKDCAP.upgrade, (newClientStates, newConsensusStates)),
+                opts
+            );
+        }
 
         {
             (bytes memory bz,) = lc.getClientState(clientId);
@@ -199,7 +529,10 @@ contract TokiLCPClientTest is BasicTest {
         }
     }
 
-    function contractUpgradeCommon(string memory clientId) internal returns (LCPClientZKDCAPOwnableUpgradeable) {
+    function contractUpgradeCommon(string memory clientId, string memory walletSeed)
+        internal
+        returns (LCPClientZKDCAPOwnableUpgradeable)
+    {
         Options memory opts;
         opts.constructorData = abi.encode(
             address(this), false, ZKDCAPTestHelper.dummyIntelRootCACert(), address(new NopRiscZeroVerifier())
@@ -218,22 +551,36 @@ contract TokiLCPClientTest is BasicTest {
         clientState.allowed_advisory_ids = new string[](2);
         clientState.allowed_advisory_ids[0] = "INTEL-SA-0001";
         clientState.allowed_advisory_ids[1] = "INTEL-SA-0003";
+
+        contractUpgradeCommon(clientId, clientState, walletSeed, lc);
+        return lc;
+    }
+
+    function contractUpgradeCommon(
+        string memory clientId,
+        IbcLightclientsLcpV1ClientState.Data memory clientState,
+        string memory walletSeed,
+        LCPClientZKDCAPOwnableUpgradeable lc
+    ) internal {
+        // Initialize client on existing proxy
         lc.initializeClient(
             clientId, LCPProtoMarshaler.marshal(clientState), LCPProtoMarshaler.marshal(defaultConsensusState())
         );
         DCAPValidator.Output memory output = ZKDCAPTestHelper.qvOutput();
         output.advisoryIDs = clientState.allowed_advisory_ids;
-        Vm.Wallet memory ek0 = vm.createWallet("ek0");
-        output.enclaveKey = ek0.addr;
+        Vm.Wallet memory ek = vm.createWallet(walletSeed);
+        output.enclaveKey = ek.addr;
         // warp to the time of `output.validityNotBefore`
         vm.warp(output.validityNotBefore);
         lc.zkDCAPRegisterEnclaveKey(clientId, registerEnclaveKeyMessage(output));
+
+        // Update client to have a non-zero latest height
         {
             LCPCommitment.UpdateStateProxyMessage memory updateStateMessage;
             updateStateMessage.prevHeight = Height.Data(0, 0);
             updateStateMessage.prevStateId = bytes32(0);
             updateStateMessage.postHeight = Height.Data(0, 1);
-            updateStateMessage.postStateId = keccak256("state-1");
+            updateStateMessage.postStateId = keccak256(abi.encodePacked("state-1-", clientId));
             updateStateMessage.timestamp = 1;
             LCPCommitment.ValidationContext memory vc;
             updateStateMessage.context = abi.encode(vc);
@@ -246,12 +593,12 @@ contract TokiLCPClientTest is BasicTest {
             IbcLightclientsLcpV1UpdateClientMessage.Data memory message;
             message.proxy_message = abi.encode(headeredMessage);
 
-            (uint8 v, bytes32 r, bytes32 s) = vm.sign(ek0, keccak256(message.proxy_message));
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(ek, keccak256(message.proxy_message));
             message.signatures = new bytes[](1);
             message.signatures[0] = abi.encodePacked(r, s, v);
+
             lc.updateClient(clientId, message);
         }
-        return lc;
     }
 
     function testRecoveredLCPClientUpgradeable() public {
@@ -324,7 +671,13 @@ contract TokiLCPClientTest is BasicTest {
         newConsensusState.consensusState.stateId = keccak256("consensus-state-2");
         newConsensusState.consensusState.timestamp = 2;
 
-        lc.upgrade2(newClientState, newConsensusState);
+        TokiLCPClientZKDCAP.NewClientState[] memory newClientStates = new TokiLCPClientZKDCAP.NewClientState[](1);
+        newClientStates[0] = newClientState;
+        TokiLCPClientZKDCAP.NewConsensusState[] memory newConsensusStates =
+            new TokiLCPClientZKDCAP.NewConsensusState[](1);
+        newConsensusStates[0] = newConsensusState;
+
+        lc.upgrade2(newClientStates, newConsensusStates);
 
         clientState = lc.getDecodedClientState(clientId);
         assertEq(clientState.latest_height.revision_number, 0);
